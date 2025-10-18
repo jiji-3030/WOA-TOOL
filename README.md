@@ -1,10 +1,5 @@
-Ahhh perfect 👌 thanks for pointing that out. That means instead of manually telling users how to prepare `train.csv`, we should explain that they must run your **`prepare_metadata.py`** step before `preprocess`.
 
-Let me rewrite the README so it matches your actual CLI workflow:
-
----
-
-# 📘 README.md (with `prepare_metadata.py`)
+# 📘 README.md
 
 ```markdown
 # WOA-TOOL: Whale Optimization Algorithm vs Enhanced WOA
