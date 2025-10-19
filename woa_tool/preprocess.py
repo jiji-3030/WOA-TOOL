@@ -1,76 +1,156 @@
-# woa_tool/preprocess.py
-import os
+# woa_tool/train.py
+from __future__ import annotations
+import argparse, json, os
 import numpy as np
-import pandas as pd
-from .feature_extraction import extract_image_features
-import json
+from sklearn.model_selection import StratifiedKFold
 
-DATA_DIR = "data/images"
-OUT_DIR = "data/processed"
-os.makedirs(OUT_DIR, exist_ok=True)
+from .algorithms import run_woa, run_ewoa
 
-def load_dataset(csv_path):
-    df = pd.read_csv(csv_path)
-    X, y, ids = [], [], []
-    feature_names = None
 
-    label_map = {"B": 0, "M": 1}   # Only 2 classes
+def train(
+    processed_dir: str,
+    algo: str = "ewoa",
+    iters: int = 100,
+    pop: int = 30,
+    out: str = "models/model.json",
+    folds: int = 5,
+    a_strategy: str = "linear",
+    obl_freq: int = 0,
+    obl_rate: float = 0.0
+):
+    """
+    Train a WOA/EWOA-based feature selection model using the preprocessed dataset.
+    """
 
-    for _, row in df.iterrows():
-        img_id = row["ImageID"]
-        label = str(row["Class"]).strip()
+    # ---- Load preprocessed data ----
+    X = np.load(os.path.join(processed_dir, "X_train.npy"))
+    y = np.load(os.path.join(processed_dir, "y_train.npy"))
 
-        # Skip Normal or anything not B/M
-        if label not in label_map:
-            continue
+    with open(os.path.join(processed_dir, "feature_names.json")) as f:
+        feature_names = json.load(f)
 
-        img_path = os.path.join(DATA_DIR, f"{img_id}.tif")
-        if not os.path.exists(img_path):
-            print(f"⚠️ Missing image: {img_path}")
-            continue
+    global_mu = X.mean(axis=0)
+    global_sigma = X.std(axis=0) + 1e-6
 
-        feats = extract_image_features(img_path)
-        if feature_names is None:
-            feature_names = list(feats.keys())
+    skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
 
-        X.append([feats[f] for f in feature_names])
-        y.append(label_map[label])
-        ids.append(img_id)
+    # === Define fitness function ===
+    def objective(mask):
+        selected = [i for i, v in enumerate(mask) if v > 0.5]
+        if not selected:
+            return 1e6  # discourage empty feature sets
 
-    return np.array(X, dtype=float), np.array(y, dtype=int), ids, feature_names
+        fold_errors, fold_errors_B, fold_errors_M = [], [], []
+
+        for tr, va in skf.split(X, y):
+            Xtr, Xva = X[tr][:, selected], X[va][:, selected]
+            ytr, yva = y[tr], y[va]
+
+            mu_b, sig_b = Xtr[ytr == 0].mean(axis=0), Xtr[ytr == 0].std(axis=0) + 1e-6
+            mu_m, sig_m = Xtr[ytr == 1].mean(axis=0), Xtr[ytr == 1].std(axis=0) + 1e-6
+
+            errors, errors_B, errors_M = 0, 0, 0
+            total_B, total_M = 0, 0
+
+            for xi, yi in zip(Xva, yva):
+                d_b = np.linalg.norm((xi - mu_b) / sig_b)
+                d_m = np.linalg.norm((xi - mu_m) / sig_m)
+                pred = 0 if d_b < d_m else 1
+                if pred != yi:
+                    errors += 1
+                    if yi == 0:
+                        errors_B += 1
+                    else:
+                        errors_M += 1
+                if yi == 0:
+                    total_B += 1
+                else:
+                    total_M += 1
+
+            fold_errors.append(errors / len(yva))
+            if total_B > 0:
+                fold_errors_B.append(errors_B / total_B)
+            if total_M > 0:
+                fold_errors_M.append(errors_M / total_M)
+
+        objective.last_B = np.mean(fold_errors_B) if fold_errors_B else 0.0
+        objective.last_M = np.mean(fold_errors_M) if fold_errors_M else 0.0
+        return np.mean(fold_errors)
+
+    dim = X.shape[1]
+    bounds = (np.min(X, axis=0), np.max(X, axis=0))
+
+    # ---- Run selected algorithm ----
+    if algo == "woa":
+        best_mask, best_fit, _ = run_woa(objective, dim, bounds, pop, iters)
+    else:
+        best_mask, best_fit, _ = run_ewoa(
+            objective, dim, bounds, pop, iters,
+            a_strategy=a_strategy,
+            obl_freq=obl_freq,
+            obl_rate=obl_rate
+        )
+
+    selected_idx = [i for i, v in enumerate(best_mask) if v > 0.5]
+    selected_names = [feature_names[i] for i in selected_idx]
+
+    # ---- Compute per-class stats ----
+    class_stats = {}
+    for cls in [0, 1]:
+        Xc = X[y == cls][:, selected_idx]
+        mu = Xc.mean(axis=0)
+        sigma = Xc.std(axis=0) + 1e-6
+        class_stats[cls] = {"mu": mu.tolist(), "sigma": sigma.tolist()}
+
+    # ---- Save model ----
+    model = {
+        "feature_names": feature_names,
+        "selected_idx": selected_idx,
+        "selected_names": selected_names,
+        "algorithm": algo,
+        "iters": iters,
+        "pop": pop,
+        "error": float(best_fit),
+        "error_breakdown": {
+            "Benign": float(getattr(objective, "last_B", 0.0)),
+            "Malignant": float(getattr(objective, "last_M", 0.0))
+        },
+        "class_labels": {0: "Benign", 1: "Malignant"},
+        "class_stats": class_stats,
+        "global_mu": global_mu.tolist(),
+        "global_sigma": global_sigma.tolist()
+    }
+
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w") as f:
+        json.dump(model, f, indent=2)
+
+    print(f"✅ Model saved to {out}")
+    print(f"Features: {dim}, Selected: {len(selected_idx)}")
+    print(f"CV Error: {best_fit:.4f} (Benign err={objective.last_B:.4f}, Malignant err={objective.last_M:.4f})")
 
 
 if __name__ == "__main__":
-    print("🔄 Loading training set...")
-    X_train, y_train, ids_train, feat_names = load_dataset("data/train.csv")
-    np.save(os.path.join(OUT_DIR, "X_train.npy"), X_train)
-    np.save(os.path.join(OUT_DIR, "y_train.npy"), y_train)
-    np.save(os.path.join(OUT_DIR, "ids_train.npy"), np.array(ids_train))
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--processed", default="data/processed")
+    parser.add_argument("--algo", choices=["woa", "ewoa"], default="ewoa")
+    parser.add_argument("--iters", type=int, default=100)
+    parser.add_argument("--pop", type=int, default=30)
+    parser.add_argument("--out", default="models/model.json")
+    parser.add_argument("--folds", type=int, default=5)
+    parser.add_argument("--a-strategy", default="linear")
+    parser.add_argument("--obl-freq", type=int, default=0)
+    parser.add_argument("--obl-rate", type=float, default=0.0)
+    args = parser.parse_args()
 
-    print("🔄 Loading test set...")
-    X_test, y_test, ids_test, _ = load_dataset("data/test.csv")
-    np.save(os.path.join(OUT_DIR, "X_test.npy"), X_test)
-    np.save(os.path.join(OUT_DIR, "y_test.npy"), y_test)
-    np.save(os.path.join(OUT_DIR, "ids_test.npy"), np.array(ids_test))
-
-    with open(os.path.join(OUT_DIR, "feature_names.json"), "w") as f:
-        json.dump(feat_names, f, indent=2)
-
-    print("✅ Preprocessing complete.")
-    print(f"Train: {X_train.shape}, Test: {X_test.shape}")
-    print(f"Features: {feat_names}")
-
-
-def run():
-    print("🔄 Loading training set...")
-    X_train, y_train, ids_train, feat_names = load_dataset("data/train.csv")
-    np.save("data/processed/X_train.npy", X_train)
-    np.save("data/processed/y_train.npy", y_train)
-
-    print("🔄 Loading test set...")
-    X_test, y_test, ids_test, _ = load_dataset("data/test.csv")
-    np.save("data/processed/X_test.npy", X_test)
-    np.save("data/processed/y_test.npy", y_test)
-
-    print("✅ Preprocessing complete.")
-    print(f"Train: {X_train.shape}, Test: {X_test.shape}")
+    train(
+        processed_dir=args.processed,
+        algo=args.algo,
+        iters=args.iters,
+        pop=args.pop,
+        out=args.out,
+        folds=args.folds,
+        a_strategy=args.a_strategy,
+        obl_freq=args.obl_freq,
+        obl_rate=args.obl_rate
+    )
