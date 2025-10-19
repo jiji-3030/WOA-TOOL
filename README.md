@@ -119,13 +119,16 @@ Train with WOA or EWOA. Example with EWOA:
 
 ```bash
 python3 -m woa_tool.cli train \
-  --data data/train.csv \
-  --images data/images \
+  --processed data/processed \
   --algo ewoa \
-  --iters 100 \
-  --pop 30 \
-  --out models/model.json \
+  --iters 250 \
+  --pop 50 \
+  --a-strategy sin \
+  --obl-freq 5 \
+  --obl-rate 0.3 \
+  --out models/model_ewoa_adaptive_obl.json \
   --folds 5
+
 ```
 
 Arguments:
