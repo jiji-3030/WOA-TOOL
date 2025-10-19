@@ -5,26 +5,22 @@ import pandas as pd
 from .feature_extraction import extract_image_features
 import json
 
-DATA_DIR = "data/images"
 OUT_DIR = "data/processed"
 os.makedirs(OUT_DIR, exist_ok=True)
+
+label_map = {"B": 0, "M": 1}   # Benign = 0, Malignant = 1
 
 def load_dataset(csv_path):
     df = pd.read_csv(csv_path)
     X, y, ids = [], [], []
     feature_names = None
 
-    label_map = {"B": 0, "M": 1}   # Only 2 classes
-
     for _, row in df.iterrows():
-        img_id = row["ImageID"]
         label = str(row["Class"]).strip()
-
-        # Skip Normal or anything not B/M
         if label not in label_map:
             continue
 
-        img_path = os.path.join(DATA_DIR, f"{img_id}.tif")
+        img_path = row["image_path"]
         if not os.path.exists(img_path):
             print(f"⚠️ Missing image: {img_path}")
             continue
@@ -35,12 +31,12 @@ def load_dataset(csv_path):
 
         X.append([feats[f] for f in feature_names])
         y.append(label_map[label])
-        ids.append(img_id)
+        ids.append(row["patient_id"])
 
     return np.array(X, dtype=float), np.array(y, dtype=int), ids, feature_names
 
 
-if __name__ == "__main__":
+def run():
     print("🔄 Loading training set...")
     X_train, y_train, ids_train, feat_names = load_dataset("data/train.csv")
     np.save(os.path.join(OUT_DIR, "X_train.npy"), X_train)
@@ -61,16 +57,5 @@ if __name__ == "__main__":
     print(f"Features: {feat_names}")
 
 
-def run():
-    print("🔄 Loading training set...")
-    X_train, y_train, ids_train, feat_names = load_dataset("data/train.csv")
-    np.save("data/processed/X_train.npy", X_train)
-    np.save("data/processed/y_train.npy", y_train)
-
-    print("🔄 Loading test set...")
-    X_test, y_test, ids_test, _ = load_dataset("data/test.csv")
-    np.save("data/processed/X_test.npy", X_test)
-    np.save("data/processed/y_test.npy", y_test)
-
-    print("✅ Preprocessing complete.")
-    print(f"Train: {X_train.shape}, Test: {X_test.shape}")
+if __name__ == "__main__":
+    run()
