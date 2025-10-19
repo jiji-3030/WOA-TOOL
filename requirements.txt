@@ -1,6 +1,7 @@
 numpy
 pandas
 scikit-learn
-pillow
 scikit-image
-matplotlib
+pillow
+tqdm
+imagecodecs
