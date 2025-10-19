@@ -100,7 +100,7 @@ pip install -r requirements.txt
 2. Run the **metadata preparation script**:
 
    ```bash
-   python3 -m woa_tool.cli prepare_metadata
+   python3 woa_tool/prepare_metadata.py
    ```
 
    This generates `data/train.csv` and/or `data/test.csv` with the required format.
