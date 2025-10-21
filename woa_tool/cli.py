@@ -60,8 +60,9 @@ def main():
         )
 
     elif args.command == "predict":
+        import json
         result = predict.predict(args.model, args.image)
-        print(result)
+        print(json.dumps(result, indent=2))
 
 
 if __name__ == "__main__":
