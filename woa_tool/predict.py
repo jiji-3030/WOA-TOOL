@@ -1,18 +1,19 @@
-# woa_tool/predict.py
 import os, json
 import numpy as np
 from typing import Dict, List
 from .feature_extraction import extract_image_features
 from .abnormality import infer_abnormality
 
+
 def predict(model_path: str, image_path: str) -> Dict:
-    # === Load trained model ===
+    """Predict class and infer abnormality for a new mammogram image."""
+
+    # === Load model ===
     with open(model_path, "r") as f:
         cfg = json.load(f)
 
     feature_names: List[str] = cfg["feature_names"]
     selected_idx: List[int] = cfg.get("selected_idx", list(range(len(feature_names))))
-
     class_stats = {
         int(cls): (
             np.array(stats["mu"], dtype=float),
@@ -25,50 +26,56 @@ def predict(model_path: str, image_path: str) -> Dict:
     gmu = np.array(cfg["global_mu"], dtype=float)
     gsg = np.array(cfg["global_sigma"], dtype=float)
 
-    # === Validate input ===
+    # === Validate image path ===
     if not os.path.isfile(image_path):
         raise FileNotFoundError(f"❌ Image not found: {image_path}")
 
-    # === Extract features from image ===
+    # === Extract features ===
     feats_raw = extract_image_features(image_path)
     x_full = np.array([feats_raw.get(f, 0.0) for f in feature_names], dtype=float)
-
-    # Select only features chosen by WOA/EWOA
     sel = np.array(selected_idx, dtype=int) if len(selected_idx) else np.arange(len(feature_names))
     x = x_full[sel]
 
-    # === Distance-based classifier ===
-    dists = {cls: np.linalg.norm((x - mu) / (sigma + 1e-6))
-             for cls, (mu, sigma) in class_stats.items()}
-
+    # === Distance-based classifier with shared variance ===
+    sig_shared = gsg[sel] + 1e-6
+    dists = {cls: np.linalg.norm((x - mu) / sig_shared) for cls, (mu, sigma) in class_stats.items()}
     inv = {class_labels[cls]: 1.0 / (d + 1e-6) for cls, d in dists.items()}
     Z = sum(inv.values()) + 1e-9
     probs = {k: float(v / Z) for k, v in inv.items()}
     final_pred = max(probs, key=probs.get)
 
-    # === Standardized feature values (z-scores) ===
+    # === Compute z-scores ===
     zvec = (x_full - gmu) / (gsg + 1e-6)
     z = {name: float(zvec[i]) for i, name in enumerate(feature_names)}
 
-    # === Abnormality analysis ===
-    abn_label, abn_probs, abn_expl = infer_abnormality(z)
+    # === Infer abnormality and background ===
+    abn_label, abn_scores, abn_expl, background = infer_abnormality(z)
+    
+    # === Per-feature contribution analysis ===
+    pred_cls = [k for k, v in class_labels.items() if v == final_pred][0]
+    mu_pred, sigma_pred = class_stats[pred_cls]
 
+    contrib_raw = np.abs((x - mu_pred) / (sigma_pred + 1e-6))
+    contrib_norm = contrib_raw / (np.sum(contrib_raw) + 1e-9)
+    feature_contrib = {
+        feature_names[sel[j]]: float(contrib_norm[j])
+        for j in range(len(sel))
+    }
+
+    # Sort by most influential
+    top_features = sorted(feature_contrib.items(), key=lambda kv: kv[1], reverse=True)[:5]
+
+    # === Return complete structured output ===
     return {
         "final_prediction": final_pred,
         "probabilities": probs,
         "abnormality_type": abn_label,
-        "abnormality_scores": abn_probs,
+        "abnormality_scores": abn_scores if isinstance(abn_scores, dict) else {},
+        "background_tissue": background,
         "explanation": {
             "class": [f"Top features contributing to {final_pred} classification"],
-            "abnormality": abn_expl
+            "abnormality": str(abn_expl)
         },
         "zscores": z,
-        "selected_features_used": cfg.get("selected_names", []),
-        "algorithm": cfg.get("algorithm", "?"),
-        "meta": {
-            "iters": cfg.get("iters"),
-            "pop": cfg.get("pop"),
-            "cv_error": cfg.get("error"),
-            "error_breakdown": cfg.get("error_breakdown", {})
-        }
+        "top_feature_contributors": top_features,
     }
