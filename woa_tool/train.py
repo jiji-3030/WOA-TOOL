@@ -1,156 +1,172 @@
-# woa_tool/train.py
-from __future__ import annotations
-import argparse, json, os
-import numpy as np
+import os, json, numpy as np
 from sklearn.model_selection import StratifiedKFold
+from .preprocess import load_processed_data
+from .algorithms import run_ewoa, run_woa
 
-from .algorithms import run_woa, run_ewoa
+# ===============================================================
+#  TRAIN MODULE — Mahalanobis-based EWOA Feature Selection
+# ===============================================================
 
+def train(processed_dir="data/processed",
+          algo="ewoa",
+          iters=500,
+          pop=80,
+          a_strategy="cos",
+          obl_freq=5,
+          obl_rate=0.15,
+          out="models/model_ewoa_final3.json",
+          folds=5):
 
-def train(
-    processed_dir: str,
-    algo: str = "ewoa",
-    iters: int = 100,
-    pop: int = 30,
-    out: str = "models/model.json",
-    folds: int = 5,
-    a_strategy: str = "linear",
-    obl_freq: int = 0,
-    obl_rate: float = 0.0
-):
-    """
-    Train a WOA/EWOA-based feature selection model using the preprocessed dataset.
-    """
+    # === Load preprocessed features and labels ===
+    X, y, feature_names = load_processed_data(processed_dir)
+    dim = X.shape[1]
 
-    # ---- Load preprocessed data ----
-    X = np.load(os.path.join(processed_dir, "X_train.npy"))
-    y = np.load(os.path.join(processed_dir, "y_train.npy"))
+    # === Normalize labels to 0=Benign, 1=Malignant ===
+    if np.mean(y) > 0.5:
+        print("⚠️ Flipping labels: ensuring 0=Benign, 1=Malignant")
+        y = 1 - y
 
-    with open(os.path.join(processed_dir, "feature_names.json")) as f:
-        feature_names = json.load(f)
-
-    # === Global normalization (helps feature scaling) ===
+    # === Z-score normalization ===
     X = (X - X.mean(axis=0)) / (X.std(axis=0) + 1e-6)
-    global_mu = X.mean(axis=0)
-    global_sigma = X.std(axis=0) + 1e-6
+    global_mu, global_sigma = X.mean(axis=0), X.std(axis=0) + 1e-6
 
     skf = StratifiedKFold(n_splits=folds, shuffle=True, random_state=42)
 
-    # === Define fitness function ===
+    # ===========================================================
+    #  Objective function (feature-subset fitness)
+    # ===========================================================
     def objective(mask):
-        """Evaluate a binary feature mask via stratified k-fold CV."""
         selected = [i for i, v in enumerate(mask) if v > 0.5]
         if not selected:
-            return 1e6  # discourage empty feature sets
+            return 1e6  # discourage empty subset
 
-        fold_errors, fold_errors_B, fold_errors_M = [], [], []
-
-        # --- prepare feature-group dictionary for diversity reward ---
-        groups = {
-            "glcm":  [i for i, n in enumerate(feature_names) if n.startswith("glcm_")],
-            "hist":  [i for i, n in enumerate(feature_names) if n.startswith("hist_")],
-            "shape": [i for i, n in enumerate(feature_names)
-                    if n.startswith("shape_") or n.startswith("asym_")],
-            "edge":  [i for i, n in enumerate(feature_names)
-                    if "edge" in n or "grad" in n],
-            "blob":  [i for i, n in enumerate(feature_names) if n.startswith("blob_")],
-        }
+        fold_errors, fold_B, fold_M = [], [], []
 
         for tr, va in skf.split(X, y):
             Xtr, Xva = X[tr][:, selected], X[va][:, selected]
             ytr, yva = y[tr], y[va]
 
-            # --- class means ---
             mu_b = Xtr[ytr == 0].mean(axis=0)
             mu_m = Xtr[ytr == 1].mean(axis=0)
 
-            # --- shared variance for both classes (robust normalization) ---
-            sig_shared = Xtr.std(axis=0) + 1e-6
+            Sb = np.cov(Xtr[ytr == 0].T) + 1e-6 * np.eye(len(selected))
+            Sm = np.cov(Xtr[ytr == 1].T) + 1e-6 * np.eye(len(selected))
+            Sp_inv = np.linalg.pinv(0.5 * (Sb + Sm))
 
-            errors_B = errors_M = 0
-            total_B = np.sum(yva == 0)
-            total_M = np.sum(yva == 1)
+            def maha(x, mu):
+                d = x - mu
+                return float(np.sqrt(d @ Sp_inv @ d))
 
+            # === τ sweep ===
+            best_err, best_tau = np.inf, 1.0
+            taus = [0.90, 0.95, 0.98, 1.00, 1.02, 1.05, 1.08, 1.10, 1.12]
+
+            for T in taus:
+                eB = eM = 0
+                for xi, yi in zip(Xva, yva):
+                    d_b, d_m = maha(xi, mu_b), maha(xi, mu_m)
+                    pred = 1 if (d_m / (d_b + 1e-9)) < T else 0
+                    if pred != yi:
+                        if yi == 0: eB += 1
+                        else: eM += 1
+                errB = eB / (np.sum(yva == 0) + 1e-6)
+                errM = eM / (np.sum(yva == 1) + 1e-6)
+                W_B, W_M = 1.0, 1.5
+                weighted = (W_B * errB + W_M * errM) / (W_B + W_M)
+                if weighted < best_err:
+                    best_err, best_tau = weighted, T
+
+            # === Final errors with best τ ===
+            eB = eM = 0
             for xi, yi in zip(Xva, yva):
-                d_b = np.linalg.norm((xi - mu_b) / sig_shared)
-                d_m = np.linalg.norm((xi - mu_m) / sig_shared)
-                pred = 0 if d_b < d_m else 1
+                d_b, d_m = maha(xi, mu_b), maha(xi, mu_m)
+                pred = 1 if (d_m / (d_b + 1e-9)) < best_tau else 0
                 if pred != yi:
-                    if yi == 0:
-                        errors_B += 1
-                    else:
-                        errors_M += 1
+                    if yi == 0: eB += 1
+                    else: eM += 1
 
-            err_B = errors_B / (total_B + 1e-6)
-            err_M = errors_M / (total_M + 1e-6)
+            errB = eB / (np.sum(yva == 0) + 1e-6)
+            errM = eM / (np.sum(yva == 1) + 1e-6)
+            weighted_err = (1.0 * errB + 1.5 * errM) / 2.5
 
-            # --- weighted balanced error (slight benign emphasis) ---
-            W_B, W_M = 1.1, 1.0
-            weighted_err = (W_B * err_B + W_M * err_M) / (W_B + W_M)
-
-            # --- subset-size regularization (target ~12 features) ---
-            k = len(selected)
-            k_target, alpha = 15, 0.010
-            size_penalty = alpha * abs(k - k_target) / max(1, X.shape[1])
-            weighted_err += size_penalty
-
-            # --- diversity bonus (reward mixed feature domains) ---
-            sel = set(selected)
-            present = sum(any(i in sel for i in groups[g]) for g in groups)
-            div_bonus = -0.01 * max(0, present - 2)   # reduce error slightly if ≥3 groups present
-            weighted_err = max(0.0, weighted_err + div_bonus)
+            # === Size penalty & diversity reward ===
+            k, target, alpha = len(selected), 17, 0.008
+            weighted_err += alpha * abs(k - target) / max(1, X.shape[1])
 
             fold_errors.append(weighted_err)
-            fold_errors_B.append(err_B)
-            fold_errors_M.append(err_M)
+            fold_B.append(errB)
+            fold_M.append(errM)
 
-        # --- summary for reporting ---
-        objective.last_B = float(np.mean(fold_errors_B))
-        objective.last_M = float(np.mean(fold_errors_M))
+        objective.last_B = float(np.mean(fold_B))
+        objective.last_M = float(np.mean(fold_M))
         return float(np.mean(fold_errors))
 
-    dim = X.shape[1]
-    bounds = (np.min(X, axis=0), np.max(X, axis=0))
-
-    # ---- Run selected algorithm ----
-    if algo == "woa":
-        best_mask, best_fit, _ = run_woa(objective, dim, bounds, pop, iters)
-    else:
-        best_mask, best_fit, _ = run_ewoa(
-            objective, dim, bounds, pop, iters,
+    # ===========================================================
+    #  Run EWOA optimizer
+    # ===========================================================
+    if algo.lower() == "ewoa":
+        best_mask, best_err, hist = run_ewoa(
+            objective, dim, (-1, 1),
+            pop_size=pop, iters=iters,
             a_strategy=a_strategy,
             obl_freq=obl_freq,
             obl_rate=obl_rate
         )
+    else:
+        best_mask, best_err, hist = run_woa(objective, dim, (-1, 1), pop, iters)
 
+    # ===========================================================
+    #  Greedy fine-tuning (single + pairwise)
+    # ===========================================================
+    print("🔧 Greedy post-optimization fine-tuning...")
+    best_subset, best_score = best_mask.copy(), best_err
+    for i in range(dim):
+        candidate = best_subset.copy(); candidate[i] = 1 - candidate[i]
+        err = objective(candidate)
+        if err < best_score:
+            best_subset, best_score = candidate, err
+            print(f"  ✅ Flip {i}: {feature_names[i]} → {err:.4f}")
+    best_mask = best_subset
+
+    print("🔁 Second-pass pairwise fine-tuning...")
+    for i in range(dim):
+        for j in range(i + 1, dim):
+            cand = best_mask.copy()
+            cand[i], cand[j] = 1 - cand[i], 1 - cand[j]
+            err = objective(cand)
+            if err < best_score - 1e-4:
+                best_mask, best_score = cand, err
+                print(f"  ✅ Pair flip ({feature_names[i]}, {feature_names[j]}) → {err:.4f}")
+
+    # ===========================================================
+    #  Save final model
+    # ===========================================================
     selected_idx = [i for i, v in enumerate(best_mask) if v > 0.5]
-    selected_names = [feature_names[i] for i in selected_idx]
+    mu_B = X[y == 0][:, selected_idx].mean(axis=0)
+    mu_M = X[y == 1][:, selected_idx].mean(axis=0)
+    sigma_B = X[y == 0][:, selected_idx].std(axis=0)
+    sigma_M = X[y == 1][:, selected_idx].std(axis=0)
 
-    # ---- Compute per-class stats ----
-    class_stats = {}
-    for cls in [0, 1]:
-        Xc = X[y == cls][:, selected_idx]
-        mu = Xc.mean(axis=0)
-        sigma = Xc.std(axis=0) + 1e-6
-        class_stats[cls] = {"mu": mu.tolist(), "sigma": sigma.tolist()}
-
-    # ---- Save model ----
     model = {
-        "feature_names": feature_names,
-        "selected_idx": selected_idx,
-        "selected_names": selected_names,
-        "algorithm": algo,
+        "algo": algo,
         "iters": iters,
         "pop": pop,
-        "error": float(best_fit),
-        "error_breakdown": {
-            "Benign": float(getattr(objective, "last_B", 0.0)),
-            "Malignant": float(getattr(objective, "last_M", 0.0))
-        },
-        "class_labels": {0: "Benign", 1: "Malignant"},
-        "class_stats": class_stats,
+        "a_strategy": a_strategy,
+        "obl_freq": obl_freq,
+        "obl_rate": obl_rate,
+        "feature_names": feature_names,
+        "selected_idx": selected_idx,
+        "selected_names": [feature_names[i] for i in selected_idx],
         "global_mu": global_mu.tolist(),
-        "global_sigma": global_sigma.tolist()
+        "global_sigma": global_sigma.tolist(),
+        "class_labels": {0: "Benign", 1: "Malignant"},
+        "class_stats": {
+            0: {"mu": mu_B.tolist(), "sigma": sigma_B.tolist()},
+            1: {"mu": mu_M.tolist(), "sigma": sigma_M.tolist()}
+        },
+        "cv_error": float(best_score),
+        "cv_error_B": float(objective.last_B),
+        "cv_error_M": float(objective.last_M)
     }
 
     os.makedirs(os.path.dirname(out), exist_ok=True)
@@ -159,30 +175,7 @@ def train(
 
     print(f"✅ Model saved to {out}")
     print(f"Features: {dim}, Selected: {len(selected_idx)}")
-    print(f"CV Error: {best_fit:.4f} (Benign err={objective.last_B:.4f}, Malignant err={objective.last_M:.4f})")
+    print(f"CV Error: {best_score:.4f} "
+          f"(Benign err={objective.last_B:.4f}, Malignant err={objective.last_M:.4f})")
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--processed", default="data/processed")
-    parser.add_argument("--algo", choices=["woa", "ewoa"], default="ewoa")
-    parser.add_argument("--iters", type=int, default=100)
-    parser.add_argument("--pop", type=int, default=30)
-    parser.add_argument("--out", default="models/model.json")
-    parser.add_argument("--folds", type=int, default=5)
-    parser.add_argument("--a-strategy", default="linear")
-    parser.add_argument("--obl-freq", type=int, default=0)
-    parser.add_argument("--obl-rate", type=float, default=0.0)
-    args = parser.parse_args()
-
-    train(
-        processed_dir=args.processed,
-        algo=args.algo,
-        iters=args.iters,
-        pop=args.pop,
-        out=args.out,
-        folds=args.folds,
-        a_strategy=args.a_strategy,
-        obl_freq=args.obl_freq,
-        obl_rate=args.obl_rate
-    )
+    return model
