@@ -9,6 +9,29 @@ OUT_DIR = "data/processed"
 os.makedirs(OUT_DIR, exist_ok=True)
 
 label_map = {"B": 0, "M": 1}   # Benign = 0, Malignant = 1
+def load_processed_data(processed_dir="data/processed"):
+    """
+    Load preprocessed feature arrays and feature names from disk.
+    Returns:
+        X (np.ndarray): feature matrix
+        y (np.ndarray): label vector (0=Benign, 1=Malignant)
+        feature_names (list[str]): list of feature names
+    """
+    X_path = os.path.join(processed_dir, "X_train.npy")
+    y_path = os.path.join(processed_dir, "y_train.npy")
+    features_path = os.path.join(processed_dir, "feature_names.json")
+
+    if not (os.path.exists(X_path) and os.path.exists(y_path) and os.path.exists(features_path)):
+        raise FileNotFoundError(
+            f"❌ Missing processed data in {processed_dir}. Run 'python3 -m woa_tool.cli preprocess' first."
+        )
+
+    X = np.load(X_path)
+    y = np.load(y_path)
+    with open(features_path, "r") as f:
+        feature_names = json.load(f)
+
+    return X, y, feature_names
 
 def load_dataset(csv_path):
     df = pd.read_csv(csv_path)
