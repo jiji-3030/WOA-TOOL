@@ -125,6 +125,53 @@ if (!empty($_POST['ajax'])) {
 }
 // === END AJAX Handling ===
 
+// === Feature name display mapping (for mock & real data) ===
+$pretty_names = [
+  // --- GLCM Texture Features ---
+  "glcm_ASM" => "GLCM Angular Second Moment",
+  "glcm_contrast" => "GLCM Contrast",
+  "glcm_correlation" => "GLCM Correlation",
+  "glcm_variance" => "GLCM Variance",
+  "glcm_IDM" => "GLCM Inverse Difference Moment",
+  "glcm_sum_entropy" => "GLCM Sum Entropy",
+  "glcm_entropy" => "GLCM Entropy",
+  "glcm_IMC1" => "GLCM Information Measure 1",
+  "glcm_IMC2" => "GLCM Information Measure 2",
+
+  // --- Histogram Features ---
+  "hist_mean" => "Histogram Mean Intensity",
+  "hist_std" => "Histogram Standard Deviation",
+  "hist_skew" => "Histogram Skewness",
+  "hist_kurtosis" => "Histogram Kurtosis",
+  "hist_q25" => "Histogram 25th Percentile",
+  "hist_q50" => "Histogram Median (50th Percentile)",
+  "hist_q75" => "Histogram 75th Percentile",
+  "density_index" => "Tissue Density Index",
+
+  // --- Edge & Gradient Features ---
+  "edge_sobel_mean" => "Mean Edge Strength (Sobel)",
+  "edge_sobel_std" => "Edge Strength Std (Sobel)",
+  "grad_coherence_mean" => "Gradient Coherence Mean",
+  "grad_coherence_std" => "Gradient Coherence Std",
+  "spic_edge_density" => "Spiculation Edge Density",
+  "spic_edge_ring_ratio" => "Spiculation Ring Ratio",
+
+  // --- Shape & Asymmetry ---
+  "shape_area" => "Lesion Area",
+  "shape_perimeter" => "Lesion Perimeter",
+  "shape_circularity" => "Shape Circularity",
+  "shape_eccentricity" => "Shape Eccentricity",
+  "shape_solidity" => "Shape Solidity",
+  "shape_extent" => "Extent Ratio",
+  "asym_absdiff_mean" => "Asymmetry Mean Difference",
+  "asym_absdiff_std" => "Asymmetry Std Difference",
+  "asym_mean_diff" => "Asymmetry Mean Diff",
+
+  // --- Blob / Mass Characteristics ---
+  "blob_count" => "Detected Mass Count",
+  "blob_radius_mean" => "Average Blob Radius",
+  "blob_radius_std" => "Blob Radius Std Deviation",
+];
 // Prepare data for initial page load (non-AJAX, potentially after form submit without JS)
 $jsonData = $result ? json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : 'null';
 // Clean buffer for HTML output
