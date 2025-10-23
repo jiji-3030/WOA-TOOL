@@ -17,6 +17,13 @@ $defaults = [
     "a_strategy" => "sin",
 ];
 
+// === Model paths ===
+$models = [
+    "woa"  => "$workdir/models/model_woa.json",
+    "ewoa" => "$workdir/models/model_ewoa_finalfinal.json",
+    "default" => "$workdir/models/model_ewoa_finalfinal.json"
+];
+
 // Return the config as array
 return [
     "python_path" => $python,
