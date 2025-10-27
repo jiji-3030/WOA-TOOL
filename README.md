@@ -258,19 +258,56 @@ python3 -m woa_tool.cli predict \
 There’s a utility to compare decisions between EWOA and vanilla WOA:
 
 ```bash
-python3 compare_woa_ewoa.py \
+python3 -m woa_tool.compare_predict \
   --image data/test_images/1-002.jpg \
   --ewoa models/model_ewoa.json \
-  --woa  models/model_woa.json
+  --woa models/model_woa.json \
+  --csv data/test.csv
+
 ```
 
 Prints a clean JSON like:
 
 ```json
 {
-  "EWOA": {"Prediction":"Malignant","Confidence":0.91,"Distance Ratio":0.82,"Top Features":[...],"Execution Time":0.033},
-  "WOA":  {"Prediction":"Benign","Confidence":1.12,"Distance Ratio":1.12,"Top Features":[...],"Execution Time":0.029},
-  "Total Runtime": 0.064
+{
+  "Image": "data/test_images/1-002.jpg",
+  "Ground Truth": "Malignant",
+  "EWOA": {
+    "Prediction": "Malignant",
+    "Correct": true,
+    "Outcome": "TP",
+    "Confidence": 1.008,
+    "Distance Ratio": 0.9922,
+    "Tau Used": 1.0014,
+    "Top Features": [
+      "glcm_sum_avg",
+      "glcm_entropy",
+      "hist_mean",
+      "shape_norm_area",
+      "shape_circularity"
+    ],
+    "Execution Time": 1.776
+  },
+  "WOA": {
+    "Prediction": "Benign",
+    "Correct": false,
+    "Outcome": "FN",
+    "Confidence": 1.0,
+    "Distance Ratio": 1.0,
+    "Tau Used": 1.0,
+    "Top Features": [
+      "spic_edge_ring_ratio",
+      "glcm_IDM",
+      "glcm_sum_avg",
+      "density_index",
+      "hist_mean"
+    ],
+    "Execution Time": 3.64
+  },
+  "Correct Classification": "Malignant"
+}
+
 }
 ```
 
