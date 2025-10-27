@@ -1,6 +1,8 @@
 # woa_tool/cli.py
 import argparse
 import sys
+import json
+import os
 
 import woa_tool.preprocess as preprocess
 import woa_tool.train as train
@@ -8,14 +10,19 @@ import woa_tool.predict as predict
 
 
 def main():
-    parser = argparse.ArgumentParser(prog="woa-tool", description="WOA vs EWOA tool (with OBL and adaptive parameters)")
-
+    parser = argparse.ArgumentParser(
+        prog="woa-tool",
+        description="WOA vs EWOA tool (with OBL and adaptive parameters)"
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     # --------------------------
     # preprocess
     # --------------------------
-    prep_parser = subparsers.add_parser("preprocess", help="Extract image features and save processed numpy arrays")
+    subparsers.add_parser(
+        "preprocess",
+        help="Extract image features and save processed numpy arrays"
+    )
 
     # --------------------------
     # train
@@ -37,16 +44,36 @@ def main():
     pred_parser = subparsers.add_parser("predict", help="Predict class for a new image")
     pred_parser.add_argument("--model", required=True, help="Path to trained model JSON")
     pred_parser.add_argument("--image", required=True, help="Path to image file")
+    pred_parser.add_argument(
+        "--tau-override", type=float, default=None,
+        help="Override τ at inference (e.g., 1.0014). If unset, use τ from model JSON (or ENV/sidecar if enabled)."
+    )
+    pred_parser.add_argument(
+        "--out-json", default=None,
+        help="Optional path to save the prediction as JSON (prints to stdout if omitted)."
+    )
+    pred_parser.add_argument(
+        "--no-pretty", action="store_true",
+        help="If set, do not pretty-print JSON to stdout."
+    )
 
-    args = parser.parse_args()
+    # --------------------------
+    # set-tau (persist τ into model)
+    # --------------------------
+    settau_parser = subparsers.add_parser("set-tau", help="Persist τ into the model JSON")
+    settau_parser.add_argument("--model", required=True, help="Path to trained model JSON")
+    settau_parser.add_argument("--tau", required=True, type=float, help="τ to write")
 
     # --------------------------
     # Dispatch
     # --------------------------
+    args = parser.parse_args()
+
     if args.command == "preprocess":
         preprocess.run()
+        return 0
 
-    elif args.command == "train":
+    if args.command == "train":
         train.train(
             processed_dir=args.processed,
             algo=args.algo,
@@ -58,11 +85,47 @@ def main():
             obl_freq=args.obl_freq,
             obl_rate=args.obl_rate,
         )
+        return 0
 
-    elif args.command == "predict":
-        import json
-        result = predict.predict(args.model, args.image)
-        print(json.dumps(result, indent=2))
+    if args.command == "predict":
+        # Basic existence checks to give clearer errors
+        if not os.path.isfile(args.model):
+            print(f"❌ Model file not found: {args.model}", file=sys.stderr)
+            return 2
+        if not os.path.isfile(args.image):
+            print(f"❌ Image file not found: {args.image}", file=sys.stderr)
+            return 2
+
+        res = predict.predict(args.model, args.image, tau_override=args.tau_override)
+
+        if args.out_json:
+            with open(args.out_json, "w") as f:
+                json.dump(res, f, indent=2)
+            print(f"✅ Saved prediction to {args.out_json}")
+            return 0
+
+        if args.no_pretty:
+            print(json.dumps(res, separators=(",", ":")))
+        else:
+            print(json.dumps(res, indent=2))
+        return 0
+
+    if args.command == "set-tau":
+        if not os.path.isfile(args.model):
+            print(f"❌ Model file not found: {args.model}", file=sys.stderr)
+            return 2
+        with open(args.model, "r") as f:
+            cfg = json.load(f)
+        cfg["tau"] = float(args.tau)
+        with open(args.model, "w") as f:
+            json.dump(cfg, f, indent=2)
+        # Optional sidecar for human visibility (useful with editors/grep)
+        with open(args.model + ".tau", "w") as f:
+            f.write(str(args.tau) + "\n")
+        print(f"✅ Persisted τ={args.tau:.4f} to {args.model}")
+        return 0
+
+    return 0
 
 
 if __name__ == "__main__":
