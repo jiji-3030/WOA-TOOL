@@ -235,7 +235,7 @@ body {
 
 @media (min-width: 992px) {
   .main-container {
-    grid-template-columns: 30% 1fr; 
+    grid-template-columns: 30% 1fr;
     gap: 2.5rem;
     padding: 3rem 1.5rem;
   }
@@ -572,23 +572,61 @@ body {
   grid-column: 1 / -1;
 }
 
+/* === Prediction Card Styling & Layout === */
 .prediction-card {
   padding-top: 2rem;
   border-top: 5px solid var(--border-color);
 }
 .prediction-card.prediction-malignant {
   border-top-color: var(--accent-warning);
-  background: rgba(220, 53, 69, 0.02);
+  background: linear-gradient(180deg, rgba(220,53,69,0.05), #fff); /* Subtle bg tint */
 }
 .prediction-card.prediction-benign {
   border-top-color: var(--accent-success);
+   background: linear-gradient(180deg, rgba(40,167,69,0.05), #fff); /* Subtle bg tint */
 }
+
+/* Layout for Text/Details and Visualizer */
+.prediction-content-layout {
+    display: grid;
+    grid-template-columns: 1fr; /* Stack on small screens */
+    gap: 2rem;
+    align-items: center;
+}
+
+@media (min-width: 600px) { /* Adjust breakpoint as needed */
+    .prediction-content-layout {
+        grid-template-columns: 1.2fr 1fr; /* Give text slightly more space */
+    }
+    .prediction-details-section {
+        border-right: 1px solid var(--border-color);
+        padding-right: 2rem;
+    }
+    .prediction-visualizer-section {
+         padding-left: 1rem;
+    }
+}
+
+.prediction-details-section {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.prediction-visualizer-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+
 .prediction-text-wrapper {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 1rem;
     text-align: center;
+    margin-bottom: 1rem; /* Space below text */
 }
 .prediction-indicator {
   display: inline-block;
@@ -596,6 +634,53 @@ body {
   height: 40px;
   flex-shrink: 0;
 }
+.prediction-indicator svg {
+    width: 100%; height: 100%;
+}
+
+
+/* === Final Prediction Visualizer (Ring Gauge) === */
+.final-vis {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  margin: 0 auto; /* Center horizontally */
+}
+.final-vis canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block; /* Remove extra space */
+}
+.final-vis .ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex; /* Use flex for centering */
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+}
+.final-vis .ring-main {
+  font-weight: 800;
+  font-size: 2.2rem; /* Make percentage larger */
+  line-height: 1.1;
+  margin-bottom: 0.1rem; /* Reduce space */
+}
+.final-vis .ring-sub {
+  font-size: 0.85rem;
+  color: var(--text-dark);
+  opacity: .9;
+  font-weight: 500;
+}
+/* Subtle glow effect based on prediction */
+.prediction-card.prediction-malignant .final-vis {
+  filter: drop-shadow(0 0 15px rgba(220, 53, 69, .25));
+}
+.prediction-card.prediction-benign .final-vis {
+  filter: drop-shadow(0 0 15px rgba(40, 167, 69, .25));
+}
+
 
 #probability-chart {
   width: 100%;
@@ -683,27 +768,27 @@ body {
 }
 /* Add this to your style.css file */
 
-/* 1. This container spans the full width of the CSS grid 
-    (assumes results-grid is 'display: grid') 
+/* 1. This container spans the full width of the CSS grid
+    (assumes results-grid is 'display: grid')
 */
 .wide-card-container {
   grid-column: 1 / -1; /* Span all columns */
-  
+
   /* 2. Use flexbox to lay out the two cards inside it */
   display: flex;
   flex-direction: row; /* Side-by-side */
   gap: 1.5rem;         /* Space between the two cards */
 }
 
-/* 3. Make the two cards inside the wide container share the space 
+/* 3. Make the two cards inside the wide container share the space
 */
 .wide-card-container > .step-card {
   flex: 1; /* Each card takes equal space */
   min-width: 300px; /* Prevent them from getting too squished */
-  
+
   /* 4. Ensure cards have same height by making content fill space */
   display: flex;
-  flex-direction: column; 
+  flex-direction: column;
 }
 
 /* 5. Make the .card-content area grow to fill the card height */
@@ -1205,9 +1290,10 @@ body {
   transition: width 0.5s ease;
 }
 
-.confidence-bar-wrapper {
+.confidence-bar-wrapper { /* Kept for legacy if needed, but hidden by default */
   margin-top: 1rem;
   text-align: center;
+  display: none; /* Hide the old bar */
 }
 .confidence-bar-bg {
   position: relative;
@@ -1309,7 +1395,8 @@ body {
   .header-buttons,
   .maximize-btn,
   .tooltip-content,
-  #error-container {
+  #error-container,
+  .toggle-wrapper /* Hide toggle buttons */ {
     display: none !important;
   }
 
@@ -1338,6 +1425,7 @@ body {
   }
   .prediction-card {
       border-top: 3px solid #000;
+       background: none !important; /* Remove background tints */
   }
   .prediction-card.prediction-malignant,
   .prediction-card.prediction-benign {
@@ -1351,22 +1439,45 @@ body {
   .prediction-indicator svg {
       stroke: #000 !important;
   }
+  /* Show decision details in print */
+  .decision-details.collapsible-content {
+      max-height: none !important;
+      opacity: 1 !important;
+      margin-top: 0.5rem !important;
+      overflow: visible !important;
+      border-top: none !important;
+  }
+   /* Hide visualizer in print */
+  .final-vis {
+      display: none !important;
+  }
+  .prediction-content-layout {
+      grid-template-columns: 1fr !important; /* Stack in print */
+  }
+   .prediction-details-section {
+       border-right: none !important;
+       padding-right: 0 !important;
+   }
+
 
   /* Style charts and tables for print */
   #probability-chart-container,
   #abnormality-chart-container {
       max-width: 100%;
       height: auto;
+      page-break-inside: avoid; /* Try to keep charts from breaking */
   }
   canvas {
       max-width: 100% !important;
       height: auto !important;
+      display: block; /* Ensure block display */
   }
   .data-table {
       margin-top: 0.5rem;
       border: 1px solid #aaa;
       font-size: 9pt;
       width: 100%;
+      page-break-inside: avoid; /* Try to keep tables from breaking */
   }
   .data-table th, .data-table td {
       border-bottom: 1px solid #ccc;
@@ -1383,6 +1494,7 @@ body {
       content: none !important;
   }
 }
+
 /* === Inline Loader Card === */
 .loader-card {
   display: flex;
@@ -1554,8 +1666,8 @@ body {
   position: relative;
   width: 100%;
   max-width: 340px;
-  height: 260px;
-  min-height: 220px;
+  height: 180px; /* Reduced height for bar chart */
+  min-height: 150px;
   margin: 1.25rem auto 0;
   padding: 0;               /* ✅ remove padding so the chart touches edges */
   background: none;         /* ✅ remove gradient background */
@@ -1567,20 +1679,13 @@ body {
   height: 100% !important;
   display: block;
 }
-
-/* Legend chips */
-.pie-legend {
-  display:flex; gap:.5rem; justify-content:center; margin-top:.75rem; flex-wrap:wrap;
-}
-.pie-legend .chip {
-  display:inline-flex; align-items:center; gap:.5rem;
-  background:#fff; border:1px solid var(--border-color);
-  padding:.35rem .6rem; border-radius:999px; font-size:.9rem; color:var(--text-light);
-  box-shadow:0 2px 6px rgba(0,0,0,.04);
-}
-.pie-legend .dot {
-  width:10px; height:10px; border-radius:50%;
-  box-shadow:0 0 0 2px rgba(0,0,0,.04) inset;
+/* Note below probability chart */
+.explain-note {
+    font-size: 0.85rem;
+    color: var(--text-dark);
+    text-align: center;
+    margin-top: 0.75rem;
+    padding: 0 0.5rem;
 }
 
 
@@ -1597,6 +1702,15 @@ body {
 #card-modal-content #probability-chart-container { height: 420px; }
 #card-modal-content #contrib-stacked-card .card-content > div { height: 350px; }
 #card-modal-content #intensity-hist-card .card-content > div { height: 450px; }
+/* === NEW: Prediction Gauge in Modal === */
+#card-modal-content .final-vis {
+    width: 280px; /* Larger in modal */
+    height: 280px;
+    margin: 1rem auto;
+}
+#card-modal-content .final-vis .ring-main { font-size: 2.8rem; }
+#card-modal-content .final-vis .ring-sub { font-size: 1rem; }
+
 
 /* Make canvases FILL their containers (do NOT use auto) */
 #card-modal-content canvas {
@@ -1926,32 +2040,32 @@ body {
 }
 
 /* Add hover effects */
-.upload-area:hover, .upload-area.dragover { 
-  border-color: var(--accent-glow); 
-  background-color: var(--accent-glow-tint); 
+.upload-area:hover, .upload-area.dragover {
+  border-color: var(--accent-glow);
+  background-color: var(--accent-glow-tint);
 }
 
 /* The icon inside the box */
-.upload-area__icon { 
-  width: 40px; 
-  height: 40px; 
-  margin-bottom: 1rem; 
-  color: var(--accent-glow); 
+.upload-area__icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 1rem;
+  color: var(--accent-glow);
   display: inline-block; /* This makes text-align work */
 }
 
 /* The text inside the box */
-.upload-area__text { 
-  color: var(--text-dark); 
-  font-weight: 500; 
-  font-size: 1.1rem; 
+.upload-area__text {
+  color: var(--text-dark);
+  font-weight: 500;
+  font-size: 1.1rem;
 }
 
 /* The helper text for file name */
-.file-meta { 
-  color: var(--text-dark); 
-  font-size: .9rem; 
-  margin-top: .5rem; 
+.file-meta {
+  color: var(--text-dark);
+  font-size: .9rem;
+  margin-top: .5rem;
   text-align: center; /* Also center this */
 }
 /* === Button Group for Forms === */
@@ -1987,17 +2101,17 @@ footer {
 
 /* === NEW: Comparison Page Layout Override === */
 @media (min-width: 992px) {
-  /* Target the <body> tag with id="page-comparison" 
+  /* Target the <body> tag with id="page-comparison"
     and find its .main-container
   */
   #page-comparison .main-container {
     /* 1. Force a single-column grid */
     grid-template-columns: 1fr;
-    
+
     /* 2. Constrain the width so it's not full-screen */
-    max-width: 1100px; 
+    max-width: 1100px;
   }
-  
+
   /* Tell the left and right columns to stack vertically
     by making them span the full (single) column.
   */
@@ -2130,11 +2244,7 @@ hr.form-divider {
   }
 }
 
-/* Ensure the check/warning icon in the prediction header is crisp */
-.prediction-indicator svg {
-  width: 40px;
-  height: 40px;
-}
+
 
 /* Make the probability bar visually consistent with decision colors */
 .prediction-card .confidence-bar-bg {
@@ -2188,13 +2298,7 @@ hr.form-divider {
   box-shadow: 0 4px 12px rgba(0,0,0,0.04);
 }
 
-/* Emphasize Malignant vs Benign coloring gently */
-.prediction-card.prediction-malignant {
-  background: linear-gradient(180deg, rgba(220,53,69,0.05), #fff);
-}
-.prediction-card.prediction-benign {
-  background: linear-gradient(180deg, rgba(40,167,69,0.05), #fff);
-}
+
 /* === NEW Styles for Simplified UI & Clarity === */
 
 /* Overall Results Layout */
@@ -2456,3 +2560,314 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
 
 /* Modal Adjustments */
 #card-modal-body .ground-truth-display { display: none; } /* Hide ground truth in modal */
+/* --- Collapsible Section --- */
+.collapsible-content {
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, opacity 0.3s ease-out, margin-top 0.3s ease-out;
+    max-height: 0;
+    opacity: 0;
+    margin-top: 0;
+    will-change: max-height, opacity;
+}
+
+.collapsible-content.is-visible {
+    max-height: 500px; /* Adjust if your content is taller */
+    opacity: 1;
+    margin-top: 0.5rem; /* Space when open */
+    border-top: 1px dashed var(--border-color); /* Add separator line */
+    padding-top: 1rem; /* Add space above content */
+}
+
+.btn-toggle-details {
+    background: none;
+    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--text-dark);
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 6px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: background-color 0.2s;
+}
+
+.btn-toggle-details:hover {
+    background-color: var(--border-color);
+}
+
+.btn-toggle-details .toggle-icon {
+    transition: transform 0.3s ease;
+}
+
+/* Rotates the arrow when active */
+.btn-toggle-details.is-active .toggle-icon {
+    transform: rotate(180deg);
+}
+/* --- Style for the new value toggle button --- */
+.btn-toggle-values {
+    background: none;
+    border: 1px solid var(--border-color);
+    padding: 4px 8px;
+    cursor: pointer;
+    color: var(--text-dark);
+    font-size: 0.8rem;
+    font-weight: 500;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+}
+.btn-toggle-values:hover {
+    background-color: var(--border-color);
+}
+/* ADD these rules to style.css around line 1489 */
+
+/* --- Manual Column Widths for Specific Tables --- */
+
+/* Apply specific widths to Top Features table */
+#top-features-card-content .data-table {
+    table-layout: fixed; /* Use fixed layout to enforce widths */
+    width: 100%;
+}
+#top-features-card-content .data-table th:nth-child(1),
+#top-features-card-content .data-table td:nth-child(1) {
+    width: 65%; /* Make the Feature column wider */
+    word-break: break-word; /* Allow long feature names to wrap */
+}
+#top-features-card-content .data-table th:nth-child(2),
+#top-features-card-content .data-table td:nth-child(2) {
+    width: 35%; /* Make the Contribution column narrower */
+    text-align: right; /* Keep value right-aligned */
+}
+#top-features-card-content .data-table th:nth-child(2) {
+    text-align: right; /* Align header right as well */
+    padding-right: 1rem; /* Add padding for alignment */
+}
+
+
+/* Apply specific widths to Z-Scores table */
+#zscores-card-content .data-table {
+    table-layout: fixed; /* Use fixed layout */
+    width: 100%;
+}
+
+/* === Continuation from user's file === */
+#zscores-card-content .data-table th:nth-child(1),
+#zscores-card-content .data-table td:nth-child(1) {
+    width: 65%; /* Feature name */
+    word-break: break-word;
+}
+
+#zscores-card-content .data-table th:nth-child(2),
+#zscores-card-content .data-table td:nth-child(2) {
+    width: 35%; /* Z-Score value */
+    text-align: right;
+}
+#zscores-card-content .data-table th:nth-child(2) {
+    text-align: right; /* Align header right as well */
+    padding-right: 1rem;
+}
+
+/* Scroll wrapper for tables */
+.table-wrapper-scroll {
+    overflow-x: auto; /* Allow horizontal scroll on small screens */
+    overflow-y: auto; /* Allow vertical scroll (as set in HTML) */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    max-height: 300px; /* From HTML */
+}
+
+/* Pill for 'Rule-based' text */
+.pill {
+    display: inline-block;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: 10rem; /* Full pill shape */
+    margin-left: 0.5rem;
+    vertical-align: middle; /* Align with h2 text */
+}
+
+.pill-rule {
+    color: var(--text-dark);
+    background-color: var(--bg-dark);
+    border: 1px solid var(--border-color);
+}
+
+/* Ensure data table mono cells are right-aligned */
+.data-table td.mono {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+/* Ensure all value cells in tables with toggles are right-aligned */
+.data-table td[data-raw-val][data-pct-val] {
+    text-align: right;
+}
+
+/* Ensure strong tag inside cells doesn't reset alignment */
+.data-table td[data-raw-val][data-pct-val] strong {
+    display: inline-block; /* Fixes any weird alignment issues */
+    font-weight: 600; /* Make toggled values bold */
+}
+
+/* Ensure headers with toggles are aligned with their content */
+.data-table th.contrib-toggle-header,
+.data-table th.zscore-toggle-header {
+    text-align: right;
+    padding-right: 1rem;
+}
+/* === Explanation Card (Improve Readability) === */
+
+/* Remove the default table styling from this specific card */
+#explanation-card-content .data-table {
+  border: none;
+  border-top: none;
+  box-shadow: none;
+  margin-top: 0.25rem; /* Small space from header */
+}
+
+/* Force rows to be full-width blocks, not table rows */
+#explanation-card-content .data-table tr {
+  display: block;
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px dashed var(--border-color); /* Separator line */
+}
+
+/* No border on the last item */
+#explanation-card-content .data-table tr:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+/* Style the 'th' as a sub-headline */
+#explanation-card-content .data-table th {
+  display: flex; /* Keeps icon aligned with text */
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 1rem; /* Make label slightly larger */
+  font-weight: 700;
+  color: var(--text-header);
+  margin-bottom: 0.5rem; /* Space between label and text */
+  text-align: left; /* Ensure it's left-aligned */
+}
+
+/* Style the 'td' as the main paragraph text */
+#explanation-card-content .data-table td {
+  display: block;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.95rem; /* Standard text size */
+  color: var(--text-light);
+  line-height: 1.6; /* More readable line spacing */
+  text-align: left; /* Ensure it's left-aligned */
+}
+
+/* Remove the alternating row background */
+#explanation-card-content .data-table tr:nth-child(even) td {
+  background: none;
+}
+/* === Explanations — upgraded styling === */
+
+/* Card body spacing */
+#explanation-card-content .card-content {
+  padding-top: .25rem;
+}
+
+/* Section blocks (replaces the “plain paragraphs” feel) */
+.explain-section {
+  background: linear-gradient(180deg,#fff,#fafbfc);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 1rem 1rem .9rem;
+  margin: .85rem 0;
+  box-shadow: 0 2px 8px rgba(0,0,0,.035);
+}
+
+.explain-title {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  font-weight: 800;
+  font-size: 1rem;
+  color: var(--text-header);
+  margin-bottom: .5rem;
+}
+
+.explain-title .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent-glow);
+  box-shadow: 0 0 0 3px var(--accent-glow-tint);
+}
+
+/* Content text */
+.explain-body {
+  color: var(--text-light);
+  line-height: 1.65;
+  font-size: .95rem;
+}
+
+/* Inline math treatment (for ratio rule) */
+.math-inline {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-header);
+  background: #fff;
+  border: 1px dashed var(--border-color);
+  padding: .15rem .4rem;
+  border-radius: 8px;
+  white-space: nowrap;
+}
+
+/* Metric chips parsed from "Entropy=1.09, ..." */
+.metric-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
+  padding: .28rem .5rem;
+  margin: .22rem .28rem .22rem 0;
+  border-radius: 999px;
+  font-size: .85rem;
+  background: var(--bg-dark);
+  border: 1px solid var(--border-color);
+  color: var(--text-light);
+}
+.metric-chip .k { font-weight: 700; color: var(--text-header); }
+.metric-chip .v { font-family: var(--font-mono); font-weight: 600; }
+
+/* Badges (Risk / Pattern) */
+.badge-row {
+  display: flex; flex-wrap: wrap; gap: .5rem;
+  margin-top: .6rem;
+}
+.badge {
+  --bg: var(--bg-dark); --fg: var(--text-light); --bd: var(--border-color);
+  display: inline-flex; align-items:center; gap: .4rem;
+  padding: .28rem .55rem; border-radius: 10rem;
+  background: var(--bg); color: var(--fg); border: 1px solid var(--bd);
+  font-size: .8rem; font-weight: 700;
+}
+.badge svg { width: 14px; height: 14px; }
+
+.badge-risk.low   { --bg: rgba(40,167,69,.08);  --fg:#1e7d3a; --bd: rgba(40,167,69,.25); }
+.badge-risk.med   { --bg: rgba(255,193,7,.12);  --fg:#8a6d1a; --bd: rgba(255,193,7,.35); }
+.badge-risk.high  { --bg: rgba(220,53,69,.10);  --fg:#a52c35; --bd: rgba(220,53,69,.35); }
+
+.badge-pattern.benign     { --bg: rgba(40,167,69,.08); --fg:#1e7d3a; --bd: rgba(40,167,69,.25); }
+.badge-pattern.malignant  { --bg: rgba(220,53,69,.10); --fg:#a52c35; --bd: rgba(220,53,69,.35); }
+
+/* Tighten the table-turned-blocks you already had */
+#explanation-card-content .data-table { margin-top: 0; }
+#explanation-card-content .data-table tr { border-bottom: none; padding: 0; margin: 0; }

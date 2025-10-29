@@ -156,9 +156,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
                     if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                         // --- Normalize abnormality_type (Seems okay based on your JSON example) ---
                          if (!isset($decoded['abnormality_type'])) {
-                           if (isset($decoded['abnormality']['type'])) { $decoded['abnormality_type'] = $decoded['abnormality']['type']; }
-                           elseif (isset($decoded['abnormality'])) { $decoded['abnormality_type'] = is_array($decoded['abnormality']) ? ($decoded['abnormality']['label'] ?? null) : $decoded['abnormality']; }
-                           elseif (isset($decoded['lesion_type'])) { $decoded['abnormality_type'] = $decoded['lesion_type']; }
+                            if (isset($decoded['abnormality']['type'])) { $decoded['abnormality_type'] = $decoded['abnormality']['type']; }
+                            elseif (isset($decoded['abnormality'])) { $decoded['abnormality_type'] = is_array($decoded['abnormality']) ? ($decoded['abnormality']['label'] ?? null) : $decoded['abnormality']; }
+                            elseif (isset($decoded['lesion_type'])) { $decoded['abnormality_type'] = $decoded['lesion_type']; }
                          }
                         // --- end normalization ---
                         $result = $decoded;
@@ -166,15 +166,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
                         $jsonErrorMsg = json_last_error_msg();
                         $error = "Model did not return valid JSON (Error: $jsonErrorMsg).";
                         if (!empty($stderr) || $code !== 0 || !empty($stdout)) {
-                          $error .= "<br>Exit Code: " . htmlspecialchars($code);
-                          if (!empty($stderr)) { $error .= "<br>Stderr: <pre>" . htmlspecialchars($stderr) . "</pre>"; }
-                           if (!empty($stdout) && json_last_error() !== JSON_ERROR_NONE) { $error .= "<br>Raw Stdout: <pre>" . htmlspecialchars($stdout) . "</pre>"; }
+                         $error .= "<br>Exit Code: " . htmlspecialchars($code);
+                         if (!empty($stderr)) { $error .= "<br>Stderr: <pre>" . htmlspecialchars($stderr) . "</pre>"; }
+                            if (!empty($stdout) && json_last_error() !== JSON_ERROR_NONE) { $error .= "<br>Raw Stdout: <pre>" . htmlspecialchars($stdout) . "</pre>"; }
                         }
                     }
 
                     if ($isDebug) {
-                      $model_path = $config['workdir'] . '/models/model_ewoa.json';
-                      $debug_pack = [ /* ... (keep your debug pack fields) ... */ ];
+                        $model_path = $config['workdir'] . '/models/model_ewoa.json';
+                        $debug_pack = [ /* ... (keep your debug pack fields) ... */ ];
                     }
 
                 } else {
@@ -220,7 +220,8 @@ ob_end_clean();
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=23"> <script src="https://cdn.jsdelivr.net/npm/tiff.js@1.0.0/tiff.min.js"></script>
+    <link rel="stylesheet" href="style.css?v=24"> <!-- Increment version -->
+    <script src="https://cdn.jsdelivr.net/npm/tiff.js@1.0.0/tiff.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         window.__PREDICT__ = <?php echo $jsonData; ?>;
@@ -293,37 +294,120 @@ ob_end_clean();
 
                     <div class="results-grid" id="results-grid">
 
+                        <!-- === UPDATED: Prediction Card with Visualizer === -->
                         <div class="step-card prediction-card animate-slide-up" id="prediction-card-content">
                             <div class="step-header">
-                                <div class="step-header-left"> <h2 style="padding-left:0;">Final Prediction</h2> </div>
+                                <div class="step-header-left">
+                                    <h2 style="padding-left:0;">Final Prediction <span class="pill pill-rule">Rule-based</span></h2>
+                                </div>
                                 <button type="button" class="maximize-card-btn" title="Maximize"> <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" /></svg> </button>
                             </div>
-                            <div class="card-content">
-                                <div class="prediction-left">
+                            <div class="card-content prediction-content-layout"> <!-- Added class -->
+
+                                <!-- Left side: Text & Details -->
+                                <div class="prediction-details-section">
                                     <div class="prediction-text-wrapper">
                                         <span class="prediction-indicator"></span>
-                                        <span style="font-size:2.5rem; font-weight:800;" data-field="final_prediction">—</span>
+                                        <span style="font-size:3.5rem; font-weight:800;" data-field="final_prediction">—</span>
                                     </div>
-                                    <div class="confidence-bar-wrapper">
-                                        <div class="confidence-bar-bg"> <div id="confidence-fill"></div> </div>
-                                        <p id="confidence-label">Top probability: —</p> </div>
-                                    <div class="decision-details" style="margin-top:0.75rem;">
+
+                                    <div class="toggle-wrapper" style="text-align: right; margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
+                                        <button type="button" class="btn-toggle-values" data-state="pct">
+                                            <span>Show Raw Values</span>
+                                        </button>
+                                        <button type="button" class="btn-toggle-details">
+                                            <span>Show Decision Logic</span>
+                                            <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>
+                                        </button>
+                                    </div>
+
+                                    <div class="decision-details collapsible-content">
                                         <table class="data-table" style="margin-top:.25rem;">
-                                            <tr> <th>d<sub>B</sub> <span class="tooltip-icon">?<span class="tooltip-content">Mahalanobis distance to Benign centroid.</span></span></th> <td data-field="distance_to_benign">—</td> </tr>
-                                            <tr> <th>d<sub>M</sub> <span class="tooltip-icon">?<span class="tooltip-content">Mahalanobis distance to Malignant centroid.</span></span></th> <td data-field="distance_to_malignant">—</td> </tr>
-                                            <tr> <th>τ <span class="tooltip-icon">?<span class="tooltip-content">Decision threshold ratio.</span></span></th> <td data-field="tau">—</td> </tr>
-                                            <tr> <th>Rule <span class="tooltip-icon">?<span class="tooltip-content">The rule used for the final decision.</span></span></th> <td data-field="ratio_decision">—</td> </tr>
+                                            <tr>
+                                                <th class="dist-toggle-header" data-pct-text="d<sub>B</sub> (Rel. %)" data-raw-text="d<sub>B</sub> (Raw)">
+                                                    <span class="header-text">d<sub>B</sub> (Rel. %)</span> <span class="tooltip-icon">?<span class="tooltip-content">Relative distance to Benign centroid.</span></span>
+                                                </th>
+                                                <td data-field="distance_to_benign" data-raw-val="—" data-pct-val="—">—</td>
+                                            </tr>
+                                            <tr>
+                                                <th class="dist-toggle-header" data-pct-text="d<sub>M</sub> (Rel. %)" data-raw-text="d<sub>M</sub> (Raw)">
+                                                    <span class="header-text">d<sub>M</sub> (Rel. %)</span> <span class="tooltip-icon">?<span class="tooltip-content">Relative distance to Malignant centroid.</span></span>
+                                                </th>
+                                                <td data-field="distance_to_malignant" data-raw-val="—" data-pct-val="—">—</td>
+                                            </tr>
+                                            <tr>
+                                                <th class="dist-toggle-header" data-pct-text="τ (%)" data-raw-text="τ (Raw)">
+                                                    <span class="header-text">τ (%)</span> <span class="tooltip-icon">?<span class="tooltip-content">Decision threshold ratio as percentage. Raw value is the direct ratio.</span></span>
+                                                </th>
+                                                <td data-field="tau" data-raw-val="—" data-pct-val="—">—</td>
+                                            </tr>
+                                            <!-- ADD these rows inside the same <table class="data-table"> in the decision-details -->
+                                            <tr class="ratio-row">
+                                              <th class="dist-toggle-header"
+                                                  data-pct-text="d<sub>M</sub>/d<sub>B</sub> (%)"
+                                                  data-raw-text="d<sub>M</sub>/d<sub>B</sub> (Raw)">
+                                                <span class="header-text">d<sub>M</sub>/d<sub>B</sub> (%)</span>
+                                                <span class="tooltip-icon">?<span class="tooltip-content">
+                                                  Distance ratio r = d<sub>M</sub> / d<sub>B</sub>. Lower favors Malignant.
+                                                </span></span>
+                                              </th>
+                                              <td data-field="distance_ratio" data-raw-val="—" data-pct-val="—">—</td>
+                                            </tr>
+                                            <tr>
+                                              <th class="dist-toggle-header"
+                                                  data-pct-text="Malignant Margin (% over boundary)"
+                                                  data-raw-text="Malignant Margin (×)">
+                                                <span class="header-text">Malignant Margin (% over boundary)</span>
+                                                <span class="tooltip-icon">?<span class="tooltip-content">
+                                                  τ / r. &gt; 1 means inside malignant side by that factor (or %).
+                                                </span></span>
+                                              </th>
+                                              <td data-field="mal_margin" data-raw-val="—" data-pct-val="—">—</td>
+                                            </tr>
+                                            <tr>
+                                              <th class="dist-toggle-header"
+                                                  data-pct-text="Benign Margin (% over boundary)"
+                                                  data-raw-text="Benign Margin (×)">
+                                                <span class="header-text">Benign Margin (% over boundary)</span>
+                                                <span class="tooltip-icon">?<span class="tooltip-content">
+                                                  r / τ. &gt; 1 means inside benign side by that factor (or %).
+                                                </span></span>
+                                              </th>
+                                              <td data-field="ben_margin" data-raw-val="—" data-pct-val="—">—</td>
+                                            </tr>
+                                            <tr>
+                                              <th>Decision Verdict
+                                                <span class="tooltip-icon">?<span class="tooltip-content">
+                                                  Human-readable check of “Malignant if dM ≤ τ·dB”, with numbers.
+                                                </span></span>
+                                              </th>
+                                              <td data-field="decision_verdict">—</td>
+                                            </tr>
+                                            <tr> <th>Rule <span class="tooltip-icon">?<span class="tooltip-content">The rule used for the final decision based on raw values.</span></span></th> <td data-field="ratio_decision">—</td> </tr>
                                         </table>
                                         <p class="file-meta" id="decision-note" style="margin-top:.5rem; text-align: right;"> {/* JS fills this */} </p>
                                     </div>
                                 </div>
+
+                                <!-- Right side: Visualizer -->
+                                <div class="prediction-visualizer-section">
+                                    <div class="final-vis" id="final-prediction-visualizer">
+                                        <canvas id="prediction-gauge-chart"></canvas>
+                                        <div class="ring-label">
+                                            <span class="ring-main"></span>
+                                            <span class="ring-sub">Confidence</span>
+                                        </div>
+                                    </div>
+                                </div>
+
                             </div>
                         </div>
+                        <!-- === END Prediction Card === -->
 
                         <div class="step-card animate-slide-up" id="probability-card-content" style="animation-delay:.1s;">
                             <div class="step-header">
-                                <div class="step-header-left"> <h2>Probabilities</h2> </div>
-                                <span class="tooltip-icon">i<span class="tooltip-content">Model probability per class.</span></span>
+                                <div class="step-header-left"> <h2>Confidence by Class</h2> </div>
+                                <span class="tooltip-icon">i<span class="tooltip-content">Model confidence per class. This visualization supports the final prediction but the decision uses the ratio rule (τ).</span></span>
                                 <button type="button" class="maximize-card-btn" title="Maximize"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" /></svg></button>
                             </div>
                             <div class="card-content"> <div id="probability-chart-container"><canvas id="probability-chart"></canvas></div> </div>
@@ -348,11 +432,8 @@ ob_end_clean();
                                 <span class="tooltip-icon">i<span class="tooltip-content">AI-generated explanations for the prediction.</span></span>
                                 <button type="button" class="maximize-card-btn" title="Maximize"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" /></svg></button>
                             </div>
-                            <div class="card-content">
-                                <table class="data-table">
-                                    <tr> <th>Class-based <span class="tooltip-icon">?<span class="tooltip-content">Reasoning based on the final class assignment.</span></span></th> <td data-field="explanation_class"></td> </tr>
-                                    <tr> <th>Abnormality Summary <span class="tooltip-icon">?<span class="tooltip-content">Summary description of detected abnormality characteristics.</span></span></th> <td data-field="explanation_abnormality_summary"></td> </tr>
-                                </table>
+                            <div class="card-content" id="explain-root">
+                                <!-- Content generated by renderExplanations JS -->
                             </div>
                         </div>
 
@@ -373,7 +454,15 @@ ob_end_clean();
                             </div>
                             <div class="card-content">
                                 <table class="data-table">
-                                    <thead><tr><th>Feature</th><th>Contribution</th></tr></thead> <tbody data-field="top_feature_contributors">   </tbody>
+                                    <thead>
+                                        <tr>
+                                            <th>Feature</th>
+                                            <th class="contrib-toggle-header" data-pct-text="Contribution (%)" data-raw-text="Contribution (Raw)">
+                                                <span class="header-text">Contribution (%)</span>
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody data-field="top_feature_contributors">    </tbody>
                                 </table>
                             </div>
                         </div>
@@ -391,23 +480,33 @@ ob_end_clean();
                                 <div class="step-header-left"> <h2>Feature Z-Scores</h2> </div>
                                 <span class="tooltip-icon">i<span class="tooltip-content">Standardized values (z-scores) for all calculated radiomic features.</span></span>
                                 <button type="button" class="maximize-card-btn" title="Maximize"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" /></svg></button>
-                            </div>
+                             </div>
                              <div class="card-content">
                                 <div class="table-wrapper-scroll" style="max-height: 300px;"> <table class="data-table">
-                                        <thead><tr><th>Feature</th><th>Z-Score</th></tr></thead>
-                                        <tbody data-field="zscores">   </tbody>
+                                        <thead>
+                                            <tr>
+                                                <th>Feature</th>
+                                                <th class="zscore-toggle-header" data-pct-text="Percentile (%)" data-raw-text="Z-Score">
+                                                    <span class="header-text">Percentile (%)</span>
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody data-field="zscores">    </tbody>
                                     </table>
                                 </div>
                              </div>
                         </div>
 
+
+
                     </div> </div>
             </div> <?php if ($result && !$isDebug): /* Keep this for raw JSON view if needed */ ?>
-                <?php endif; ?>
+                 <?php endif; ?>
         </div> </div> <footer> <p>WOA & EWOA Breast Cancer Detection Tool. For research purposes only. Not for clinical use.</p> </footer>
 
     <div id="image-modal-overlay"></div>
     <div id="card-modal-overlay"> <div id="card-modal-content"> <button class="close-modal-btn">&times;</button> <h2 class="modal-title"></h2> <div class="modal-body"></div> </div> </div>
+
 
     <script>
     document.addEventListener('DOMContentLoaded', () => {
@@ -445,8 +544,13 @@ ob_end_clean();
 
         // === Get Computed CSS Colors ===
         const computedStyles = getComputedStyle(document.documentElement);
-        const chartColors = { accentGlow: computedStyles.getPropertyValue('--accent-glow').trim(), accentGlowTint: computedStyles.getPropertyValue('--accent-glow-tint').trim(), accentSuccess: computedStyles.getPropertyValue('--accent-success').trim(), accentWarning: computedStyles.getPropertyValue('--accent-warning').trim(), textDark: computedStyles.getPropertyValue('--text-dark').trim(), borderColor: computedStyles.getPropertyValue('--border-color').trim(), };
+        const chartColors = { accentGlow: computedStyles.getPropertyValue('--accent-glow').trim(), accentGlowTint: computedStyles.getPropertyValue('--accent-glow-tint').trim(), accentSuccess: computedStyles.getPropertyValue('--accent-success').trim(), accentWarning: computedStyles.getPropertyValue('--accent-warning').trim(), textDark: computedStyles.getPropertyValue('--text-dark').trim(), borderColor: computedStyles.getPropertyValue('--border-color').trim(), bgDark: computedStyles.getPropertyValue('--bg-dark').trim() };
         const PASTELS = ['rgba(99, 179, 237, 0.7)','rgba(132, 204, 145, 0.7)','rgba(250, 202, 154, 0.7)','rgba(196, 181, 253, 0.7)','rgba(252, 165, 165, 0.7)','rgba(153, 246, 228, 0.7)'];
+        // Dedicated pastel colors for the probability charts
+        const PASTEL_PROBS = {
+            benign: 'rgba(144, 238, 144, 0.8)',      // light green
+            malignant: 'rgba(255, 182, 193, 0.8)'   // light pink
+        };
 
         // === Utility Functions ===
         function showError(m) { errorContainer.innerHTML = `<div class="step-card error-card animate-slide-up"><strong>Error:</strong> ${m}</div>`; }
@@ -456,6 +560,17 @@ ob_end_clean();
         function handleFileSelect() { if (fileInput.files.length > 0) { const f = fileInput.files[0]; renderToCanvas(f).then(rC => { const mW = previewWrapper.clientWidth || 900; const mH = 400; const sc = scaleCanvasToFit(rC, mW, mH); previewWrapper.dataset.fullImage = rC.toDataURL(); displayCanvas(sc, previewWrapper); const nE = document.getElementById('image-filename'); if (nE) { nE.textContent = f.name; nE.style.display = 'block'; } submitBtn.disabled = false; clearBtn.style.display = 'inline-flex'; uploadArea.style.display = 'none'; }).catch(err => { console.error(err); showError('Could not read or render image.'); }); } }
         function closeCardModal() { cardModalOverlay.classList.remove('visible'); document.body.style.overflow = ''; cardModalBody.innerHTML = ''; currentMaximizedChartId = null; /* Destroy modal chart instance if exists */ }
         function escapeHTML(s) { return String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+
+        // --- Normal CDF for mapping z-score -> percentile ---
+        function normalCdf(z){
+            // Abramowitz & Stegun 7.1.26 approximation
+            const b1=0.319381530, b2=-0.356563782, b3=1.781477937, b4=-1.821255978, b5=1.330274429;
+            const p=0.2316419; const t=1/(1+p*Math.abs(z));
+            const poly=((((b5*t + b4)*t + b3)*t + b2)*t + b1)*t;
+            const phi=Math.exp(-0.5*z*z)/Math.sqrt(2*Math.PI);
+            const cdf=1 - phi*poly;
+            return z>=0 ? cdf : 1-cdf;
+        }
 
         // === Modal Display Logic ===
         function showContentInModal(title, contentHtml, chartId = null) {
@@ -491,10 +606,41 @@ ob_end_clean();
 
                     try {
                         let newChart;
+
+
                         if (chartId === 'probability-chart') {
-                            const probs = resultData.probabilities || {}; const ben = probs['Benign'] ?? 0; const mal = probs['Malignant'] ?? 0;
-                            newChart = new Chart(ctx, { type: 'doughnut', data: { labels: ['Benign', 'Malignant'], datasets: [{ data: [ben, mal], backgroundColor: [chartColors.accentSuccess, chartColors.accentWarning], borderColor: '#fff', borderWidth: 3, cutout: '60%', hoverOffset: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels:{ font:{ size: 14 } } } } } });
-                        } else if (chartId === 'abnormality-chart') {
+                            const probs = resultData.probabilities || {};
+                            const ben = probs['Benign'] ?? 0;
+                            const mal = probs['Malignant'] ?? 0;
+                            newChart = new Chart(ctx, {
+                                type: 'bar',
+                                data: {
+                                    labels: ['Benign', 'Malignant'],
+                                    datasets: [{
+                                        label: 'Model Probability (%)',
+                                        data: [ben * 100, mal * 100],
+                                        backgroundColor: [PASTEL_PROBS.benign, PASTEL_PROBS.malignant],
+                                        borderWidth: 0,
+                                        borderRadius: 8
+                                    }]
+                                },
+                                options: {
+                                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+                                    scales: {
+                                        x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: 'rgba(0,0,0,0.08)' } },
+                                        y: { grid: { display: false } }
+                                    },
+                                    plugins: {
+                                        legend: { display: false },
+                                        tooltip: { callbacks: { label: ctx => `${ctx.parsed.x.toFixed(1)}%` } }
+                                    },
+                                    animation: { duration: 700 }
+                                }
+                            });
+                        }
+
+
+                        else if (chartId === 'abnormality-chart') {
                             const abnScores = resultData.abnormality_scores || {}; const abnValues = Object.values(abnScores);
                             newChart = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(abnScores).map(k => PRETTY_NAMES[k] || k), datasets: [{ label: 'Score', data: abnValues, backgroundColor: abnValues.map((_, i) => PASTELS[i % PASTELS.length]), borderWidth: 0, borderRadius: 5 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true }, y: { ticks: { font: {size: 14} } } }, plugins: { legend: { display: false } } } });
                         } else if (chartId === 'contrib-stacked') {
@@ -556,6 +702,7 @@ ob_end_clean();
             const pred = resultData.final_prediction || '—';
             const predClass = pred.toLowerCase();
             const predColor = pred === 'Malignant' ? chartColors.accentWarning : chartColors.accentSuccess;
+            const predBgColor = pred === 'Malignant' ? chartColors.accentWarning : chartColors.accentSuccess; // Use same color for gauge
 
             if (predEl) { predEl.textContent = pred; predEl.style.color = predColor; const pC=predEl.closest('.prediction-card'); if(pC)pC.className=`step-card prediction-card animate-slide-up prediction-${predClass}`; }
             if (indEl) { const bSVG=`<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="${chartColors.accentSuccess}"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`; const mSVG=`<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="${chartColors.accentWarning}"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>`; indEl.innerHTML = pred === 'Malignant' ? mSVG : bSVG; }
@@ -565,50 +712,92 @@ ob_end_clean();
             const malProb = probs['Malignant'] || 0;
             const confVal = Math.max(benProb, malProb);
             const probWinner = (benProb >= malProb) ? 'Benign' : 'Malignant';
-            const confFill = document.getElementById('confidence-fill');
-            const confLabel = document.getElementById('confidence-label');
-            if (confFill) { confFill.style.width = (confVal * 100) + '%'; confFill.style.backgroundColor = (probWinner === 'Malignant' ? chartColors.accentWarning : chartColors.accentSuccess); } // Color by probability winner
-            if (confLabel) { confLabel.textContent = `Top probability: ${(confVal * 100).toFixed(1)}% (${probWinner})`; }
 
-            // Distances, Tau, Rule
+            // --- Prediction Gauge Visualizer ---
+            const gaugeCanvas = document.getElementById('prediction-gauge-chart');
+            const ringLabelMain = document.querySelector('.final-vis .ring-main');
+            if (gaugeCanvas && ringLabelMain) {
+                const ctx = gaugeCanvas.getContext('2d');
+                if (activeCharts['prediction-gauge']) activeCharts['prediction-gauge'].destroy();
+
+                const gaugeValue = confVal * 100;
+                const remainingValue = 100 - gaugeValue;
+
+                activeCharts['prediction-gauge'] = new Chart(ctx, {
+                    type: 'doughnut', data: { datasets: [{ data: [gaugeValue, remainingValue], backgroundColor: [ predBgColor, chartColors.bgDark ], borderWidth: 0, borderRadius: 5 }] },
+                    options: { responsive: true, maintainAspectRatio: true, cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { duration: 800, easing: 'easeOutQuart' }, elements: { arc: { roundedCorners: true, } } }
+                });
+                ringLabelMain.textContent = `${gaugeValue.toFixed(1)}%`; ringLabelMain.style.color = predColor;
+            }
+
+            // --- Distances, Tau, Rule ---
             const dB = Number(resultData.distance_to_benign);
             const dM = Number(resultData.distance_to_malignant);
             const tau = Number(resultData.tau);
             const ruleText = resultData.ratio_decision || '—';
-            document.querySelector('[data-field="distance_to_benign"]').textContent = Number.isFinite(dB) ? dB.toFixed(4) : '—';
-            document.querySelector('[data-field="distance_to_malignant"]').textContent = Number.isFinite(dM) ? dM.toFixed(4) : '—';
-            document.querySelector('[data-field="tau"]').textContent = Number.isFinite(tau) ? tau.toFixed(4) : '—';
+
+            // Calculate Percentages for Distances/Tau
+            const totalDist = dB + dM;
+            let rawDB = '—', rawDM = '—', rawTau = '—';
+            let pctBStr = '—', pctMStr = '—', pctTauStr = '—';
+            if (Number.isFinite(dB) && Number.isFinite(dM) && totalDist > 0) { pctBStr = ((dB / totalDist) * 100).toFixed(1) + '%'; pctMStr = ((dM / totalDist) * 100).toFixed(1) + '%'; }
+            if (Number.isFinite(dB)) rawDB = dB.toFixed(4);
+            if (Number.isFinite(dM)) rawDM = dM.toFixed(4);
+            if (Number.isFinite(tau)) { rawTau = tau.toFixed(4); pctTauStr = (tau * 100).toFixed(1) + '%'; }
+
+            // Populate Distance/Tau Cells
+            const dbCell = document.querySelector('[data-field="distance_to_benign"]');
+            const dmCell = document.querySelector('[data-field="distance_to_malignant"]');
+            const tauCell = document.querySelector('[data-field="tau"]');
+            if(dbCell) { dbCell.dataset.rawVal = rawDB; dbCell.dataset.pctVal = pctBStr; dbCell.textContent = pctBStr; }
+            if(dmCell) { dmCell.dataset.rawVal = rawDM; dmCell.dataset.pctVal = pctMStr; dmCell.textContent = pctMStr; }
+            if(tauCell) { tauCell.dataset.rawVal = rawTau; tauCell.dataset.pctVal = pctTauStr; tauCell.textContent = pctTauStr; }
             document.querySelector('[data-field="ratio_decision"]').textContent = ruleText;
 
-            let ratioSaysMalignant = null;
-            if (Number.isFinite(dB) && Number.isFinite(dM) && Number.isFinite(tau) && dB > 0) { // Check dB > 0
-                ratioSaysMalignant = (dM <= tau * dB);
+            // --- Decision Ratio & Margins Calculation & Population ---
+            const ratioCell = document.querySelector('[data-field="distance_ratio"]');
+            const malMarginCell = document.querySelector('[data-field="mal_margin"]');
+            const benMarginCell = document.querySelector('[data-field="ben_margin"]');
+            const verdictCell = document.querySelector('[data-field="decision_verdict"]');
+            let r = NaN, malMargin = NaN, benMargin = NaN, verdictText = '—', inequality = '?', rhsRaw = '?', lhsRaw = '?';
+            if (Number.isFinite(dB) && dB > 0 && Number.isFinite(dM) && Number.isFinite(tau) && tau > 0) {
+              r = dM / dB; malMargin = tau / r; benMargin = r / tau;
+              const isMalignant = (dM <= tau * dB);
+              lhsRaw = dM.toFixed(4); rhsRaw = (tau * dB).toFixed(4); inequality = isMalignant ? '≤' : '>';
+              verdictText = `Check (Malignant if dM ≤ τ·dB): dM=${lhsRaw} ${inequality} τ·dB=${rhsRaw} → ${isMalignant ? 'Malignant' : 'Benign'}`;
             }
+            if (ratioCell) { const raw = Number.isFinite(r) ? r.toFixed(4) : '—'; const pct = Number.isFinite(r) ? (r * 100).toFixed(1) + '%' : '—'; ratioCell.dataset.rawVal = raw; ratioCell.dataset.pctVal = pct; ratioCell.textContent = pct; }
+            if (malMarginCell) { const raw = Number.isFinite(malMargin) ? malMargin.toFixed(4) + '×' : '—'; const pct = Number.isFinite(malMargin) ? ((malMargin - 1) * 100).toFixed(1) + '%' : '—'; malMarginCell.dataset.rawVal = raw; malMarginCell.dataset.pctVal = pct; malMarginCell.innerHTML = `<strong>${pct}</strong>`; }
+            if (benMarginCell) { const raw = Number.isFinite(benMargin) ? benMargin.toFixed(4) + '×' : '—'; const pct = Number.isFinite(benMargin) ? ((benMargin - 1) * 100).toFixed(1) + '%' : '—'; benMarginCell.dataset.rawVal = raw; benMarginCell.dataset.pctVal = pct; benMarginCell.innerHTML = `<strong>${pct}</strong>`; }
+            if (verdictCell) { verdictCell.textContent = verdictText; }
 
+            // Persist Ratio/Margins to resultData for CSV
+            if (Number.isFinite(r)) resultData.distance_ratio = r.toFixed(6);
+            if (Number.isFinite(malMargin)) { resultData.malignant_margin_x = malMargin.toFixed(6); resultData.malignant_margin_pct = ((malMargin - 1) * 100).toFixed(3) + '%'; }
+            if (Number.isFinite(benMargin)) { resultData.benign_margin_x = benMargin.toFixed(6); resultData.benign_margin_pct = ((benMargin - 1) * 100).toFixed(3) + '%'; }
+            if (verdictText && verdictText !== '—') resultData.decision_verdict = verdictText;
+
+            // --- Reset Value Toggle Button & Headers ---
+            const valueToggleBtn = document.querySelector('.btn-toggle-values');
+            if (valueToggleBtn) { valueToggleBtn.dataset.state = 'pct'; valueToggleBtn.querySelector('span').textContent = 'Show Raw Values'; }
+            document.querySelectorAll('.dist-toggle-header').forEach(header => { const ts = header.querySelector('.header-text'); if (ts) ts.innerHTML = header.dataset.pctText || ''; });
+
+            // --- Update Decision Note ---
             const decisionNote = document.getElementById('decision-note');
-            const probabilitiesDisagree = (probWinner !== pred);
-            if (decisionNote) {
-                let parts = [];
-                 if (ratioSaysMalignant !== null) {
-                    const lhs = dM.toFixed(4);
-                    const rhs = (tau * dB).toFixed(4);
-                    const inequality = ratioSaysMalignant ? '≤' : '>';
-                    parts.push(`Ratio Test: ${lhs} ${inequality} ${rhs}`);
-                 } else {
-                     parts.push("Ratio Test: N/A");
-                 }
-                // parts.push(`Rule: ${ruleText}`); // Rule text from backend might be enough
-                if (probabilitiesDisagree) { parts.push('Note: Probabilities disagree; ratio rule used.'); }
-                decisionNote.textContent = parts.join(' • ');
-            }
+            if (decisionNote) { const pd = (probWinner !== (resultData.final_prediction || '—')); decisionNote.textContent = `Decision Check: dM=${lhsRaw} ${inequality} τ·dB=${rhsRaw}${pd ? ' • Note: Probabilities disagree; ratio rule used.' : ''}`; }
 
             // --- Probability Chart ---
             const probCanvas = document.getElementById('probability-chart');
             if (probCanvas) {
                 const ctx = probCanvas.getContext('2d');
-                activeCharts['probability-chart'] = new Chart(ctx, { type: 'doughnut', data: { labels:['Benign','Malignant'], datasets: [{ data: [benProb, malProb], backgroundColor: [chartColors.accentSuccess, chartColors.accentWarning], borderColor: '#fff', borderWidth: 2, cutout: '60%', hoverOffset: 6 }] }, options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: false } }, animation: { duration: 700 } } });
-                // Add legend dynamically
-                (function mPL(){ const w=document.querySelector('#probability-card-content .card-content'); if(!w||w.querySelector('.pie-legend'))return; const l=document.createElement('div'); l.className='pie-legend'; const bP=(benProb*100).toFixed(1)+'%'; const mP=(malProb*100).toFixed(1)+'%'; l.innerHTML=`<span class="chip"><span class="dot" style="background:${chartColors.accentSuccess}"></span>Benign: ${bP}</span><span class="chip"><span class="dot" style="background:${chartColors.accentWarning}"></span>Malignant: ${mP}</span>`; w.appendChild(l); })();
+                if (activeCharts['probability-chart']) activeCharts['probability-chart'].destroy();
+                activeCharts['probability-chart'] = new Chart(ctx, {
+                    type: 'bar', data: { labels: ['Benign', 'Malignant'], datasets: [{ label: 'Model Probability (%)', data: [benProb * 100, malProb * 100], backgroundColor: [PASTEL_PROBS.benign, PASTEL_PROBS.malignant], borderWidth: 0, borderRadius: 6 }] },
+                    options: { indexAxis: 'y', responsive: true, maintainAspectRatio: true, scales: { x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: chartColors.borderColor } }, y: { grid: { display: false } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.x.toFixed(1)}%` } } }, animation: { duration: 700 } }
+                });
+                const wrap = document.querySelector('#probability-card-content .card-content'); let noteEl = wrap.querySelector('.explain-note');
+                if (!noteEl) { noteEl = document.createElement('div'); noteEl.className = 'explain-note file-meta'; noteEl.style.marginTop = '0.75rem'; noteEl.style.textAlign = 'center'; wrap.appendChild(noteEl); }
+                noteEl.textContent = 'Note: These bars show model confidence. The final prediction uses the ratio test (τ).';
             }
 
             // --- Background Card ---
@@ -617,90 +806,57 @@ ob_end_clean();
             document.querySelector('#background-card-content [data-field="background_tissue_text"]').textContent = bg.text ?? '—';
             document.querySelector('#background-card-content [data-field="background_tissue_explain"]').textContent = bg.explain ?? '—';
 
-            // --- Explanations Card ---
+            // --- Explanations Card (Rendered by JS function) ---
             const cExp = (Array.isArray(resultData.explanation?.class) && resultData.explanation.class.length > 0) ? resultData.explanation.class.map(e => `${escapeHTML(e)}`).join('<br>') : '—';
-            document.querySelector('#explanation-card-content [data-field="explanation_class"]').innerHTML = cExp;
             const aSumm = resultData.explanation?.abnormality_summary || '—';
-            document.querySelector('#explanation-card-content [data-field="explanation_abnormality_summary"]').textContent = aSumm;
+
+            // === Explanations Renderer (Call this AFTER defining cExp and aSumm) ===
+            (function renderExplanations() {
+              const root = document.getElementById('explain-root');
+              if (!root) { console.error("Could not find #explain-root element."); return; }
+              const iconInfo = `<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 110-16 8 8 0 010 16zM9 9h2v6H9V9zm1-4a1.25 1.25 0 100 2.5A1.25 1.25 0 0010 5z"/></svg>`;
+              const iconShield = `<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l7 3v5c0 4.418-2.686 7.418-7 8-4.314-.582-7-3.582-7-8V5l7-3z"/></svg>`;
+              function decorateMath(s) { if (!s) return ''; return `<span class="math-inline">${s.replace(/<=/g, '≤').replace(/->/g, '→').replace(/\*/g, '·')}</span>`; }
+              function metricsToChips(summary) { if (!summary) return ''; const c = []; const re = /([A-Za-z][A-Za-z_ ]+)\s*=\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/gi; let m; while ((m = re.exec(summary)) !== null) c.push(`<span class="metric-chip"><span class="k">${m[1].trim()}</span><span class="v">${Number(m[2]).toFixed(2)}</span></span>`); return c.join(''); }
+              function riskBadge(summary) { const s = (summary || '').toLowerCase(); if (s.includes('risk level: high')) return `<span class="badge badge-risk high">${iconShield} High Risk</span>`; if (s.includes('risk level: medium')) return `<span class="badge badge-risk med">${iconShield} Medium Risk</span>`; if (s.includes('risk level: low')) return `<span class="badge badge-risk low">${iconShield} Low Risk</span>`; return ''; }
+              function patternBadge(ct, sum) { const b = `${ct||''} ${sum||''}`.toLowerCase(); if (b.includes('→ malignant')||b.includes('malignant pattern')) return `<span class="badge badge-pattern malignant">${iconInfo} Malignant Pattern</span>`; if (b.includes('benign pattern')||b.includes('→ benign')) return `<span class="badge badge-pattern benign">${iconInfo} Benign Pattern</span>`; return ''; }
+              const classHTML = `<div class="explain-section"><div class="explain-title"><span class="dot"></span>Class-based</div><div class="explain-body">${decorateMath(cExp || '')}</div></div>`;
+              const metricsHTML = metricsToChips(aSumm || '');
+              const badgesHTML = `<div class="badge-row">${patternBadge(cExp, aSumm)}${riskBadge(aSumm)}</div>`;
+              // MODIFIED LINE: Removed the direct inclusion of aSumm text
+              const summaryHTML = `<div class="explain-section"><div class="explain-title"><span class="dot"></span>Abnormality Summary</div><div class="explain-body">${metricsHTML||''}${badgesHTML}</div></div>`;
+              root.innerHTML = classHTML + summaryHTML;
+            })();
 
 
             // --- Abnormality Scores Chart ---
             const abnScores = resultData.abnormality_scores || {};
             const abnCtx = document.getElementById('abnormality-chart')?.getContext('2d');
-            // const abnTypeEl = document.querySelector('#abnormality-card-content [data-field="abnormality_type"]'); // Removed, type is separate
-            // if (abnTypeEl) abnTypeEl.textContent = resultData.abnormality_type || '—'; // Show type if available
-
             if (abnCtx) {
-                const abnVals = Object.values(abnScores);
-                const abnLabels = Object.keys(abnScores).map(k => PRETTY_NAMES[k] || k); // Use pretty names for labels
+                if (activeCharts['abnormality-chart']) activeCharts['abnormality-chart'].destroy();
+                const abnVals = Object.values(abnScores); const abnLabels = Object.keys(abnScores).map(k => PRETTY_NAMES[k] || k);
                 activeCharts['abnormality-chart'] = new Chart(abnCtx, { type: 'bar', data: { labels: abnLabels, datasets: [{ label: 'Score', data: abnVals, backgroundColor: abnVals.map((_, i) => PASTELS[i % PASTELS.length]), borderWidth: 0, borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true }, y: { ticks: { font: { size: 11 } } } }, plugins: { legend: { display: false } } } });
             }
 
             // --- Top Contributors Table ---
-            const topF = Array.isArray(resultData.top_feature_contributors) ? resultData.top_feature_contributors.map(([name, val]) =>
-                `<tr><td>${escapeHTML(PRETTY_NAMES[name] || name)}</td><td class="mono"><strong>${escapeHTML(Number(val).toFixed(4))}</strong></td></tr>`
-            ).join('') : '<tr><td colspan="2">No data</td></tr>';
-            const topFEl = document.querySelector('#top-features-card-content [data-field="top_feature_contributors"]');
-            if (topFEl) topFEl.innerHTML = topF;
+            (function(){ const tfc = Array.isArray(resultData.top_feature_contributors)?resultData.top_feature_contributors:[]; const t=tfc.reduce((s,x)=>s+(Number(x?.[1])||0),0)||1; const rows=tfc.map(([n,r])=>{const p=(Number(r)/t)*100; const pr=PRETTY_NAMES[n]||n; return`<tr><td>${escapeHTML(pr)}</td><td class="mono" data-raw-val="${escapeHTML(Number(r).toFixed(4))}" data-pct-val="${escapeHTML(p.toFixed(1)+'%')}"><strong>${escapeHTML(p.toFixed(1)+'%')}</strong></td></tr>`;}).join('')||'<tr><td colspan="2">No data</td></tr>'; const tb=document.querySelector('#top-features-card-content [data-field="top_feature_contributors"]'); if(tb)tb.innerHTML=rows; })();
 
             // --- Stacked Contributions Chart ---
-            (function() {
-                const canvas = document.getElementById('contrib-stacked');
-                if (!canvas) return;
-                const tfc = Array.isArray(resultData.top_feature_contributors) ? resultData.top_feature_contributors : [];
-                const total = tfc.reduce((s, x) => s + (x?.[1] || 0), 0) || 1;
-                const pct = tfc.map(([label, v]) => [(PRETTY_NAMES[label] || label), (v / total) * 100]);
-                const datasets = pct.map(([label, value], i) => ({ label, data:[value], backgroundColor: PASTELS[i % PASTELS.length], borderWidth: 0 }));
-                activeCharts['contrib-stacked'] = new Chart(canvas.getContext('2d'), { type: 'bar', data: { labels: ['Contribution'], datasets }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, min: 0, max: 100, ticks: { callback: v => v + '%' } }, y: { stacked: true } }, plugins: { legend: { position: 'bottom', labels: { boxWidth:15, font:{size:10} } } } } });
-            })();
+            (function(){ const cv=document.getElementById('contrib-stacked'); if(!cv)return; if(activeCharts['contrib-stacked'])activeCharts['contrib-stacked'].destroy(); const tfc=Array.isArray(resultData.top_feature_contributors)?resultData.top_feature_contributors:[]; const t=tfc.reduce((s,x)=>s+(x?.[1]||0),0)||1; const pct=tfc.map(([l,v])=>[(PRETTY_NAMES[l]||l),(v/t)*100]); const ds=pct.map(([l,v],i)=>({label:l,data:[v],backgroundColor:PASTELS[i%PASTELS.length],borderWidth:0})); activeCharts['contrib-stacked']=new Chart(cv.getContext('2d'),{type:'bar',data:{labels:['Contribution'],datasets:ds},options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,scales:{x:{stacked:true,min:0,max:100,ticks:{callback:v=>v+'%'}},y:{stacked:true}},plugins:{legend:{position:'bottom',labels:{boxWidth:15,font:{size:10}}}}}}); })();
 
             // --- Z-Scores Table ---
-            const zscores = resultData.zscores || {};
-            const zscoreTbody = document.querySelector('#zscores-card-content [data-field="zscores"]');
-            if (zscoreTbody) {
-                let zscoreHtml = '';
-                // Sort keys alphabetically for consistent order
-                Object.keys(zscores).sort().forEach(key => {
-                    const prettyName = PRETTY_NAMES[key] || key;
-                    const value = Number.isFinite(zscores[key]) ? zscores[key].toFixed(4) : 'N/A';
-                    zscoreHtml += `<tr><td>${escapeHTML(prettyName)}</td><td class="mono">${escapeHTML(value)}</td></tr>`;
-                });
-                zscoreTbody.innerHTML = zscoreHtml || '<tr><td colspan="2">No Z-Score data</td></tr>';
-            }
+            { const zs=resultData.zscores||{}; const ztb=document.querySelector('#zscores-card-content [data-field="zscores"]'); if(ztb){ const rows=Object.keys(zs).sort().map(k=>{const pn=PRETTY_NAMES[k]||k; const z=Number(zs[k]); const raw=Number.isFinite(z)?z.toFixed(4):'N/A'; const pct=Number.isFinite(z)?(normalCdf(z)*100).toFixed(1)+'%':'N/A'; return`<tr><td>${escapeHTML(pn)}</td><td class="mono" data-raw-val="${escapeHTML(raw)}" data-pct-val="${escapeHTML(pct)}"><strong>${escapeHTML(pct)}</strong></td></tr>`;}).join('')||'<tr><td colspan="2">No Z-Score data</td></tr>'; ztb.innerHTML=rows; const zh=document.querySelector('#zscores-card-content .zscore-toggle-header .header-text'); if(zh)zh.innerHTML='Percentile (%)'; }}
 
+            // --- Re-attach Maximize Button Listeners ---
+            resultsGrid.querySelectorAll('.maximize-card-btn').forEach(b=>{const nb=b.cloneNode(true); b.parentNode.replaceChild(nb,b); nb.addEventListener('click',e=>{const c=e.target.closest('.step-card[id]');if(c?.id){const t=c.querySelector('h2')?.textContent.trim()||'Details'; const ce=c.querySelector('.card-content'); if(ce){const cl=ce.cloneNode(true);let cid=c.querySelector('canvas')?.id||null; if(c.id==='zscores-card-content')cid=null; if(c.id==='prediction-card-content')cid='prediction-gauge-chart'; showContentInModal(t,cl.innerHTML,cid);}}});});
 
-            // --- Re-attach maximize button listeners ---
-            resultsGrid.querySelectorAll('.maximize-card-btn').forEach(button => {
-                 // Clone to remove old listeners, then re-add
-                const newButton = button.cloneNode(true);
-                button.parentNode.replaceChild(newButton, button);
-                newButton.addEventListener('click', (e) => {
-                    const card = e.target.closest('.step-card[id]');
-                    if (card && card.id) {
-                        const cardTitle = card.querySelector('h2')?.textContent.trim() || 'Details';
-                        const cardContentElement = card.querySelector('.card-content');
-                        if (cardContentElement) {
-                            const cardContentClone = cardContentElement.cloneNode(true);
-                            let chartIdInCard = null;
-                            const canvas = card.querySelector('canvas');
-                            if (canvas) chartIdInCard = canvas.id; // Get ID if canvas exists
-
-                            // For z-scores, just clone the content, no chart re-render
-                            if(card.id === 'zscores-card-content') chartIdInCard = null;
-
-                            showContentInModal(cardTitle, cardContentClone.innerHTML, chartIdInCard);
-                        }
-                    }
-                });
-            });
-
-            // Re-attach print/csv listeners
+            // --- Re-attach Print/CSV Listeners ---
             const printBtn = document.getElementById('print-btn'); if (printBtn) { const nPB = printBtn.cloneNode(true); printBtn.parentNode.replaceChild(nPB, printBtn); nPB.addEventListener('click', () => window.print()); }
-            const csvBtn = document.getElementById('csv-btn'); if (csvBtn) { const nCB = csvBtn.cloneNode(true); csvBtn.parentNode.replaceChild(nCB, csvBtn); nCB.addEventListener('click', () => openCSVPreview(resultData)); } // Pass updated function
+            const csvBtn = document.getElementById('csv-btn'); if (csvBtn) { const nCB = csvBtn.cloneNode(true); csvBtn.parentNode.replaceChild(nCB, csvBtn); nCB.addEventListener('click', () => openCSVPreview(resultData)); }
 
         } // End displayResults
 
-        // === CSV Functions (UPDATED) ===
+        // === CSV Functions (Updated with new fields) ===
         function downloadCSV(rd) {
              let c = "Category,Parameter,Value\r\n";
              const e = (s) => { if (s==null) return ''; let r=String(s); if (r.includes(',')||r.includes('"')||r.includes('\n')) r='"'+r.replace(/"/g,'""')+'"'; return r; };
@@ -710,18 +866,24 @@ ob_end_clean();
              c+=`Decision,distance_to_malignant,${e(rd.distance_to_malignant)}\r\n`;
              c+=`Decision,tau,${e(rd.tau)}\r\n`;
              c+=`Decision,ratio_decision_rule,${e(rd.ratio_decision)}\r\n`;
+             c+=`Decision,distance_ratio,${e(rd.distance_ratio ?? '')}\r\n`;
+             c+=`Decision,malignant_margin_x,${e(rd.malignant_margin_x ?? '')}\r\n`;
+             c+=`Decision,malignant_margin_pct,${e(rd.malignant_margin_pct ?? '')}\r\n`;
+             c+=`Decision,benign_margin_x,${e(rd.benign_margin_x ?? '')}\r\n`;
+             c+=`Decision,benign_margin_pct,${e(rd.benign_margin_pct ?? '')}\r\n`;
+             c+=`Decision,decision_verdict,${e(rd.decision_verdict ?? '')}\r\n`;
              c+=`Abnormality,type,${e(rd.abnormality_type)}\r\n`;
-             if(rd.abnormality_scores) Object.entries(rd.abnormality_scores).forEach(([k,v])=>c+=`Abnormality Score,${e(PRETTY_NAMES[k] || k)},${e(v)}\r\n`); // Use pretty name
+             if(rd.abnormality_scores) Object.entries(rd.abnormality_scores).forEach(([k,v])=>c+=`Abnormality Score,${e(PRETTY_NAMES[k] || k)},${e(v)}\r\n`);
              if(rd.background_tissue){ c+=`Background,code,${e(rd.background_tissue.code)}\r\n`; c+=`Background,text,${e(rd.background_tissue.text)}\r\n`; c+=`Background,explanation,${e(rd.background_tissue.explain)}\r\n`; }
-             if(rd.explanation?.class) c+=`Explanation,class,${e(rd.explanation.class.join('; '))}\r\n`;
-             if(rd.explanation?.abnormality_summary) c+=`Explanation,abnormality_summary,${e(rd.explanation.abnormality_summary)}\r\n`; // Updated field
-             if(rd.top_feature_contributors) rd.top_feature_contributors.forEach(([n,v])=>c+=`Feature Contribution,${e(PRETTY_NAMES[n] || n)},${e(v)}\r\n`); // Use pretty name
-             if(rd.zscores) Object.keys(rd.zscores).sort().forEach(k => c+=`Z-Score,${e(PRETTY_NAMES[k] || k)},${e(rd.zscores[k])}\r\n`); // Add Z-Scores with pretty names
+             if(rd.explanation?.class) c+=`Explanation,class,${e(Array.isArray(rd.explanation.class) ? rd.explanation.class.join('; ') : rd.explanation.class)}\r\n`;
+             if(rd.explanation?.abnormality_summary) c+=`Explanation,abnormality_summary,${e(rd.explanation.abnormality_summary)}\r\n`;
+             if(rd.top_feature_contributors) rd.top_feature_contributors.forEach(([n,v])=>c+=`Feature Contribution,${e(PRETTY_NAMES[n] || n)},${e(v)}\r\n`);
+             if(rd.zscores) Object.keys(rd.zscores).sort().forEach(k => c+=`Z-Score,${e(PRETTY_NAMES[k] || k)},${e(rd.zscores[k])}\r\n`);
 
              const b=new Blob([c],{type:'text/csv;charset=utf-8;'}); const l=document.createElement("a");
              if(l.download!==undefined){ const u=URL.createObjectURL(b); const t=new Date().toISOString().replace(/:/g,'-').slice(0,19); l.setAttribute("href",u); l.setAttribute("download",`prediction_results_${t}.csv`); l.style.visibility='hidden'; document.body.appendChild(l); l.click(); document.body.removeChild(l); }
-        }
-        function buildCSVPreviewHTML(rd, l=35) { // Show more rows
+         }
+        function buildCSVPreviewHTML(rd, l=35) {
              const rs=[];
              rs.push(["Prediction","final_prediction",String(rd.final_prediction??"—")]);
              if(rd.probabilities)Object.entries(rd.probabilities).forEach(([k,v])=>rs.push(["Probability",k,String(v??"—")]));
@@ -729,16 +891,22 @@ ob_end_clean();
              rs.push(["Decision","distance_to_malignant",String(rd.distance_to_malignant??"—")]);
              rs.push(["Decision","tau",String(rd.tau??"—")]);
              rs.push(["Decision","ratio_decision_rule",String(rd.ratio_decision??"—")]);
+             rs.push(["Decision","distance_ratio",String(rd.distance_ratio ?? "—")]);
+             rs.push(["Decision","malignant_margin_x",String(rd.malignant_margin_x ?? "—")]);
+             rs.push(["Decision","malignant_margin_pct",String(rd.malignant_margin_pct ?? "—")]);
+             rs.push(["Decision","benign_margin_x",String(rd.benign_margin_x ?? "—")]);
+             rs.push(["Decision","benign_margin_pct",String(rd.benign_margin_pct ?? "—")]);
+             rs.push(["Decision","decision_verdict",String(rd.decision_verdict ?? "—")]);
              rs.push(["Abnormality","type",String(rd.abnormality_type??"—")]);
              if(rd.abnormality_scores)Object.entries(rd.abnormality_scores).forEach(([k,v])=>rs.push(["Abnormality Score", PRETTY_NAMES[k] || k ,String(v??"—")]));
              if(rd.background_tissue){rs.push(["Background","code",String(rd.background_tissue.code??"—")]); rs.push(["Background","text",String(rd.background_tissue.text??"—")]); rs.push(["Background","explanation",String(rd.background_tissue.explain??"—")]);}
-             if(Array.isArray(rd.explanation?.class))rs.push(["Explanation","class",String(rd.explanation.class.join("; "))]);
+             if(rd.explanation?.class) rs.push(["Explanation","class",String(Array.isArray(rd.explanation.class) ? rd.explanation.class.join("; ") : rd.explanation.class)]);
              if(rd.explanation?.abnormality_summary)rs.push(["Explanation","abnormality_summary",String(rd.explanation.abnormality_summary)]);
              if(Array.isArray(rd.top_feature_contributors))rd.top_feature_contributors.forEach(([n,v])=>rs.push(["Feature Contribution", PRETTY_NAMES[n] || n ,String(v??"—")]));
              if(rd.zscores) Object.keys(rd.zscores).sort().forEach(k => rs.push(["Z-Score", PRETTY_NAMES[k] || k, String(rd.zscores[k] ?? "—")]));
 
              const lim=rs.slice(0,l); let t='<div class="table-wrapper-scroll"><table class="data-table"><thead><tr><th>Category</th><th>Parameter</th><th>Value</th></tr></thead><tbody>'; lim.forEach(r=>t+=`<tr><td>${escapeHTML(r[0])}</td><td>${escapeHTML(r[1])}</td><td>${escapeHTML(r[2])}</td></tr>`); t+='</tbody></table></div>'; t+=`<div class="modal__actions" style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.75rem;"><button type="button" class="btn" id="csv-download-confirm">Download All ${rs.length} Rows</button><button type="button" class="btn btn-secondary" id="csv-preview-close">Close</button></div><p class="file-meta" style="margin-top:.5rem; text-align:right;">Showing first ${lim.length} of ${rs.length} rows.</p>`; return t;
-        }
+         }
         function openCSVPreview(rd) { const h=buildCSVPreviewHTML(rd); showContentInModal('CSV Preview', h); const dl=document.getElementById('csv-download-confirm'); const cl=document.getElementById('csv-preview-close'); if(dl)dl.addEventListener('click',()=>{downloadCSV(rd); closeCardModal();}); if(cl)cl.addEventListener('click',closeCardModal); }
 
 
@@ -748,17 +916,16 @@ ob_end_clean();
         let initialImageSrc = null;
 
         // Determine initial state (PHP load > LocalStorage > Default)
-        if (initialPredictData?.result) { // Result from PHP (e.g., non-JS submit)
+        if (initialPredictData?.result) { // Result from PHP
             resultsPlaceholder.style.display = 'none';
             displayResults(initialPredictData.result);
             clearBtn.style.display = 'inline-flex';
             initialImageSrc = window.__UPLOADED_IMAGE__;
         } else if (stored?.result) { // Result from localStorage
             resultsPlaceholder.style.display = 'none';
-            displayResults(stored.result); // Display stored result
+            displayResults(stored.result);
             clearBtn.style.display = 'inline-flex';
-            initialImageSrc = stored.imagePath || stored.previewDataUrl; // Use stored image path
-             // Set window.__PREDICT__ from storage so modal logic works on first load
+            initialImageSrc = stored.imagePath || stored.previewDataUrl;
              window.__PREDICT__ = { ok: true, result: stored.result, image: stored.imagePath };
         } else { // Default initial state
             resultsPlaceholder.style.display = 'block';
@@ -775,13 +942,58 @@ ob_end_clean();
                 const mW = previewWrapper.clientWidth || 900; const mH = 400; const sc = scaleCanvasToFit(rC, mW, mH);
                 displayCanvas(sc, previewWrapper);
                 const nE = document.getElementById('image-filename'); if (nE) { nE.textContent = (initialPredictData ? window.__UPLOADED_IMAGE__?.split('/').pop() : stored?.filename) || 'image'; nE.style.display = 'block'; }
-                submitBtn.disabled = false; // Enable submit if image loaded
+                submitBtn.disabled = false;
                 uploadArea.style.display = 'none';
-                // Don't build histogram here, let displayResults handle it
             };
-            img.onerror = () => { console.warn("Could not load initial image:", initialImageSrc); clearState(); /* Clear bad state? */ };
+            img.onerror = () => { console.warn("Could not load initial image:", initialImageSrc); clearState(); };
             img.src = initialImageSrc;
         }
+
+        // === Event listener for Toggles (Value + Details) ===
+        document.body.addEventListener('click', e => {
+            // --- Value Toggler (Raw/Pct) ---
+            const valueToggleBtn = e.target.closest('.btn-toggle-values');
+            if (valueToggleBtn) {
+                const currentState = valueToggleBtn.dataset.state || 'pct';
+                const newState = currentState === 'pct' ? 'raw' : 'pct';
+                valueToggleBtn.dataset.state = newState;
+                const span = valueToggleBtn.querySelector('span'); if (span) span.textContent = (newState === 'pct') ? 'Show Raw Values' : 'Show Percentages';
+
+                const setHeader = (selector, pctTextAttr = 'pctText', rawTextAttr = 'rawText') => { const w=document.querySelector(selector); if(!w)return; const h=w.querySelector('.header-text'); if(!h)return; h.innerHTML=w.dataset[(newState==='pct')?pctTextAttr:rawTextAttr]||h.innerHTML; };
+                const swapCells = (containerSelector) => { const c=document.querySelector(containerSelector); if(!c)return; c.querySelectorAll('td[data-raw-val][data-pct-val]').forEach(td=>{const v=td.dataset[(newState==='pct')?'pctVal':'rawVal']||'—';if(td.querySelector('strong'))td.innerHTML=`<strong>${v}</strong>`;else td.textContent=v;}); };
+
+                // Apply to Prediction Card Headers + Cells
+                document.querySelectorAll('#prediction-card-content .dist-toggle-header').forEach(h=>{const hdr=h.querySelector('.header-text');if(hdr)hdr.innerHTML=h.dataset[(newState==='pct')?'pctText':'rawText']||hdr.innerHTML;});
+                ['[data-field="distance_to_benign"]','[data-field="distance_to_malignant"]','[data-field="tau"]','[data-field="distance_ratio"]','[data-field="mal_margin"]','[data-field="ben_margin"]'].forEach(sel=>{const td=document.querySelector(`#prediction-card-content ${sel}`);if(td){const v=td.dataset[(newState==='pct')?'pctVal':'rawVal']||'—';if(sel.includes('margin'))td.innerHTML=`<strong>${v}</strong>`;else td.textContent=v;}});
+
+                // Apply to Top Features Card
+                setHeader('#top-features-card-content .contrib-toggle-header'); swapCells('#top-features-card-content');
+                // Apply to Z-Scores Card
+                setHeader('#zscores-card-content .zscore-toggle-header'); swapCells('#zscores-card-content');
+            }
+
+            // --- Collapsible Details Toggler ---
+            const detailsToggleBtn = e.target.closest('.btn-toggle-details');
+            if (detailsToggleBtn) {
+                const wrapper = detailsToggleBtn.closest('.toggle-wrapper'); if (!wrapper) return;
+                const content = wrapper.nextElementSibling;
+                if (content?.classList.contains('collapsible-content')) {
+                    detailsToggleBtn.classList.toggle('is-active'); content.classList.toggle('is-visible');
+                    const span = detailsToggleBtn.querySelector('span'); if (span) { span.textContent = content.classList.contains('is-visible') ? 'Hide Decision Logic' : 'Show Decision Logic'; }
+                }
+            }
+        }); // End of body click listener
+
+        // --- Reset details button/panel state on initial load ---
+        const initialDetailsBtn = document.querySelector('#prediction-card-content .btn-toggle-details');
+        const initialDetailsPanel = document.querySelector('#prediction-card-content .decision-details');
+        if (initialDetailsBtn && initialDetailsPanel) {
+            initialDetailsBtn.classList.remove('is-active');
+            initialDetailsPanel.classList.remove('is-visible');
+            const initialLabel = initialDetailsBtn.querySelector('span');
+            if (initialLabel) initialLabel.textContent = 'Show Decision Logic';
+        }
+
 
     });
     </script>
