@@ -19,6 +19,9 @@ End-to-end pipeline for training and serving a Mahalanobis-ratio classifier on m
 python3 -m venv .venv
 source .venv/bin/activate
 
+# 1.2) Prepare Dataset
+python3 prepare_metadata
+
 # 2) Install requirements
 pip install -r requirements.txt
 
