@@ -15,14 +15,16 @@ No metadata is read here; this is purely image-derived.
 """
 
 from __future__ import annotations
+from typing import Dict, Tuple
+
 import numpy as np
 import mahotas
-from typing import Dict, Tuple
 from skimage import io, color, exposure, morphology, measure, util
 from skimage.filters import sobel, laplace, threshold_otsu
 from skimage.feature import canny, blob_log, structure_tensor
 from skimage.transform import resize
 from scipy.stats import skew, kurtosis
+
 
 # -------------------------------------------------------------------------
 # Utility helpers
@@ -72,9 +74,14 @@ def _quantiles(a: np.ndarray, qs=(25, 50, 75)) -> Tuple[float, ...]:
 # -------------------------------------------------------------------------
 
 def _glcm_features(img: np.ndarray) -> dict[str, float]:
+    """
+    IMPORTANT: ignore_zeros=True to avoid background zeros (from ROI masking)
+    dominating co-occurrence counts.
+    """
     im8 = (img * 255).astype(np.uint8)
-    # Haralick features (13 metrics averaged over 4 directions)
-    feats = mahotas.features.haralick(im8, distance=1, ignore_zeros=False).mean(axis=0)
+    feats = mahotas.features.haralick(
+        im8, distance=1, ignore_zeros=True  # ← key change
+    ).mean(axis=0)
     names = [
         "ASM", "contrast", "correlation", "variance",
         "IDM", "sum_avg", "sum_var", "sum_entropy",
@@ -100,6 +107,7 @@ def _histogram_features(img: np.ndarray) -> Dict[str, float]:
         "hist_q25": q25,
         "hist_q50": q50,
         "hist_q75": q75,
+        # keep for backwards-compat; historically same as mean in this codebase
         "density_index": mean,
     }
 
@@ -198,17 +206,20 @@ def _shape_and_spiculation_features(img: np.ndarray) -> Dict[str, float]:
         feats["shape_solidity"] = float(getattr(r, "solidity", 0.0))
         feats["shape_extent"] = float(getattr(r, "extent", 0.0))
 
+        # Build a ring mask in full-image coordinates
         boundary = morphology.binary_dilation(r.image) ^ morphology.binary_erosion(r.image)
         ring = np.zeros_like(mask, dtype=bool)
         minr, minc, maxr, maxc = r.bbox
         ring[minr:maxr, minc:maxc] = boundary
         ring = morphology.binary_dilation(ring, morphology.disk(3))
 
+        # Edge density inside ring
         sob = sobel(img)
         edge_bin = sob > (sob.mean() + sob.std())
         if ring.sum() > 50:
             feats["spic_edge_ring_ratio"] = float(edge_bin[ring].mean())
 
+        # Orientation dispersion in ring (structure tensor)
         Axx, Axy, Ayy = structure_tensor(img, sigma=1.2)
         tmp = np.sqrt((Axx - Ayy) ** 2 + 4 * Axy ** 2)
         l1 = 0.5 * (Axx + Ayy + tmp)
@@ -231,24 +242,23 @@ def extract_image_features(image_path: str) -> Dict[str, float]:
     Enhanced image feature extraction for mammograms.
     Includes adaptive contrast normalization, ROI masking, and normalized features.
     """
-
     img = _safe_load_grayscale(image_path)
 
-    # === 1. Adaptive contrast normalization (CLAHE) ===
+    # 1) Adaptive contrast normalization (CLAHE)
     img = exposure.equalize_adapthist(img, clip_limit=0.02)
 
-    # === 2. ROI masking using Otsu threshold (ignore dark background) ===
+    # 2) ROI masking using Otsu threshold (ignore dark background)
     try:
         thr = threshold_otsu(img)
         roi_mask = img > thr
-        if np.sum(roi_mask) > 1000:  # ensure valid region
+        if np.sum(roi_mask) > 1000:
             img = img * roi_mask
     except Exception:
         pass
 
-    feats = {}
+    feats: Dict[str, float] = {}
 
-    # === 3. Core radiomic features ===
+    # 3) Core radiomic features
     feats.update(_glcm_features(img))
     feats.update(_histogram_features(img))
     feats.update(_edge_gradient_features(img))
@@ -257,7 +267,7 @@ def extract_image_features(image_path: str) -> Dict[str, float]:
     feats.update(_asymmetry_features(img))
     feats.update(_shape_and_spiculation_features(img))
 
-    # === 4. Extra spiculation metric (edge density near boundary) ===
+    # 4) Extra spiculation metric (edge density near boundary)
     try:
         sob = sobel(img)
         thr = threshold_otsu(img)
@@ -272,20 +282,21 @@ def extract_image_features(image_path: str) -> Dict[str, float]:
             minr, minc, maxr, maxc = r.bbox
             ring[minr:maxr, minc:maxc] = boundary
             ring = morphology.binary_dilation(ring, morphology.disk(3))
-            if ring.sum() > 50:
-                feats["spic_edge_density"] = float(np.mean(sob[ring]))
+            feats["spic_edge_density"] = float(np.mean(sob[ring])) if ring.sum() > 50 else 0.0
+        else:
+            feats["spic_edge_density"] = 0.0
     except Exception:
         feats["spic_edge_density"] = 0.0
 
-    # === 5. Directional GLCM variance (texture consistency across directions) ===
+    # 5) Directional GLCM variance (texture consistency across directions)
     try:
         im8 = (img * 255).astype(np.uint8)
-        glcm_all = mahotas.features.haralick(im8, distance=1, ignore_zeros=False)
+        glcm_all = mahotas.features.haralick(im8, distance=1, ignore_zeros=True)
         feats["glcm_direction_var"] = float(np.var(glcm_all, axis=0).mean())
     except Exception:
         feats["glcm_direction_var"] = 0.0
 
-    # === 6. Shape normalization (relative to total image area) ===
+    # 6) Shape normalization (relative to total image area)
     try:
         h, w = img.shape[:2]
         area = float(h * w)
@@ -293,7 +304,7 @@ def extract_image_features(image_path: str) -> Dict[str, float]:
     except Exception:
         feats["shape_norm_area"] = 0.0
 
-    # === 8. NaN/Inf guard ===
+    # 7) NaN/Inf guard
     for k, v in list(feats.items()):
         feats[k] = _nan_safe(v, 0.0)
 
