@@ -2871,3 +2871,737 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
 /* Tighten the table-turned-blocks you already had */
 #explanation-card-content .data-table { margin-top: 0; }
 #explanation-card-content .data-table tr { border-bottom: none; padding: 0; margin: 0; }
+/* === NEW Styles for Background Tissue Card === */
+.birads-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%; /* Make it circular */
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: white;
+    background-color: var(--text-light); /* Default color */
+    flex-shrink: 0; /* Prevent shrinking */
+    box-shadow: var(--shadow-sm);
+    text-transform: uppercase;
+}
+
+/* Color coding based on BI-RADS Density Category (adjust colors as needed) */
+.birads-badge.birads-a { background-color: #63b3ed; } /* Example: Blue for Fatty */
+.birads-badge.birads-b { background-color: #68d391; } /* Example: Green for Scattered */
+.birads-badge.birads-c { background-color: #f6ad55; } /* Example: Orange for Heterogeneously Dense */
+.birads-badge.birads-d { background-color: #f56565; } /* Example: Red for Extremely Dense */
+
+/* Minor adjustments for text alignment within the card if needed */
+#background-card-content .text-sm { font-size: 0.875rem; }
+#background-card-content .text-lg { font-size: 1.125rem; }
+#background-card-content .font-medium { font-weight: 500; }
+#background-card-content .font-semibold { font-weight: 600; }
+#background-card-content .text-gray-500 { color: var(--text-light); }
+#background-card-content .text-xs { font-size: 0.75rem; }
+#background-card-content .mb-3 { margin-bottom: 0.75rem; }
+#background-card-content .mt-2 { margin-top: 0.5rem; }
+#background-card-content .items-center { align-items: center; }
+#background-card-content .space-x-4 > :not([hidden]) ~ :not([hidden]) { margin-left: 1rem; } /* Simplified spacing */
+#background-card-content .flex-1 { flex: 1 1 0%; }
+#background-card-content .flex { display: flex; }
+
+        /* Style for the new explanation card */
+        .explanation-bridge-card {
+            background-color: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+            grid-column: 1 / -1; /* Span full width */
+        }
+        .explanation-bridge-card h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-light);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .explanation-bridge-card p {
+            font-size: 0.9rem;
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+        .explanation-bridge-card p + p {
+            margin-top: 0.5rem;
+        }
+        .explanation-bridge-card strong {
+            font-weight: 600;
+            color: var(--text-light);
+        }
+        
+        /* Icon styles for card headers */
+        .step-header-left h2 svg {
+            width: 20px;
+            height: 20px;
+            margin-right: 0.5rem;
+            color: var(--accent-glow);
+            flex-shrink: 0;
+        }
+        
+        /* Specific card tweaks */
+        #top-features-card-content {
+            border-top: 3px solid var(--accent-glow-tint);
+            background-color: var(--bg-light);
+        }
+        #zscores-card-content {
+             border-top: 3px solid var(--accent-success);
+             background-color: var(--bg-light);
+             grid-column: 1 / -1; /* Make Z-Score card span full width */
+        }
+         #zscores-card-content .step-header-left h2 svg {
+             color: var(--accent-success);
+         }
+         
+        /* NEW: Z-Score side-by-side layout */
+        .zscore-layout-container {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+            gap: 1.5rem;
+        }
+        .zscore-table-wrapper {
+            flex: 1; /* Grow and shrink */
+            min-width: 280px; /* Don't get too small */
+        }
+        .zscore-chart-wrapper {
+            flex: 1.2; /* Grow and shrink, slightly wider */
+            min-width: 300px; /* Don't get too small */
+            /* Height will be set by JS */
+        }
+        /* Remove fixed max-height from style tag, JS will handle it */
+        #zscores-card-content .table-wrapper-scroll {
+             max-height: 400px; /* JS will override this */
+        }
+        
+        /* NEW: Container for Top Features & Contributions Chart */
+        .contributions-layout-wrapper {
+            grid-column: 1 / -1; /* Span full width */
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.25rem;
+            align-items: stretch; /* Make cards same height */
+        }
+        
+        /* Ensure sub-cards stretch */
+        .contributions-layout-wrapper .step-card {
+            height: 100%;
+        }
+
+
+      /* === TFC merged card layout (table + chart side by side) === */
+#tfc-card-content { border-top: 3px solid var(--accent-glow-tint); background-color: var(--bg-light); }
+.tfc-layout-container { display:flex; flex-direction:row; flex-wrap:wrap; gap:1.5rem; }
+.tfc-table-wrapper { flex:1; min-width:280px; }
+.tfc-chart-wrapper { flex:1.2; min-width:300px; }
+/* default height; JS may override */
+#tfc-card-content .table-wrapper-scroll { max-height: 320px; }
+
+
+        /* Style for the new explanation card */
+        .explanation-bridge-card {
+            background-color: var(--bg-dark);
+            border: 1px solid var(--border-color);
+            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+            grid-column: 1 / -1; /* Span full width */
+        }
+        .explanation-bridge-card h3 {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-light);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .explanation-bridge-card p {
+            font-size: 0.9rem;
+            color: var(--text-dark);
+            line-height: 1.6;
+        }
+        .explanation-bridge-card p + p {
+            margin-top: 0.5rem;
+        }
+        .explanation-bridge-card strong {
+            font-weight: 600;
+            color: var(--text-light);
+        }
+        
+        /* Icon styles for card headers */
+        .step-header-left h2 svg {
+            width: 20px;
+            height: 20px;
+            margin-right: 0.5rem;
+            color: var(--accent-glow);
+            flex-shrink: 0;
+        }
+        
+        #zscores-card-content {
+             border-top: 3px solid var(--accent-success);
+             background-color: var(--bg-light);
+             grid-column: 1 / -1; /* Make Z-Score card span full width */
+        }
+         #zscores-card-content .step-header-left h2 svg {
+             color: var(--accent-success);
+         }
+         
+        /* NEW: Z-Score side-by-side layout */
+        .zscore-layout-container {
+            display: flex;
+            flex-direction: row;
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+            gap: 1.5rem;
+        }
+        .zscore-table-wrapper {
+            flex: 1; /* Grow and shrink */
+            min-width: 280px; /* Don't get too small */
+        }
+        .zscore-chart-wrapper {
+            flex: 1.2; /* Grow and shrink, slightly wider */
+            min-width: 300px; /* Don't get too small */
+            /* Height will be set by JS */
+        }
+        /* Remove fixed max-height from style tag, JS will handle it */
+        #zscores-card-content .table-wrapper-scroll {
+             max-height: 400px; /* JS will override this */
+        }
+        
+
+        /* === TFC merged card layout (table + chart side by side) === */
+        #tfc-card-content { border-top: 3px solid var(--accent-glow-tint); background-color: var(--bg-light); grid-column: 1 / -1; }
+        .tfc-layout-container { display:flex; flex-direction:row; flex-wrap:wrap; gap:1.5rem; }
+        .tfc-table-wrapper { flex:1; min-width:280px; }
+        .tfc-chart-wrapper { flex:1.2; min-width:300px; }
+        /* default height; JS may override */
+        #tfc-card-content .table-wrapper-scroll { max-height: 320px; }
+  
+    /* subtle loader sheen */
+    @keyframes indeterminate-progress{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+    #progress-fill{position:relative;overflow:hidden;background:var(--accent-glow)}
+    #progress-fill::after{content:'';position:absolute;top:0;left:0;bottom:0;right:0;transform:translateX(-100%);background:rgba(255,255,255,0.3);animation:indeterminate-progress 2s infinite ease-in-out}
+ 
+
+.comparison-card .collapsible-content {
+  opacity: 1;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.comparison-card .collapsible-content[style*="max-height"] {
+   max-height: 1000px !important; /* <-- ADDED FIX: Override JS height */
+   margin-top: 0.5rem;
+   padding-top: 1rem;
+   border-top: 1px dashed var(--border-color);
+}
+
+    @media (min-width: 992px) {
+      #page-comparison .main-container {
+        max-width: 1600px; /* Increased from 1100px (in style.css) */
+      }
+    }
+
+/* 1. Widen page content */
+@media (min-width: 992px) {
+  #page-comparison .main-container {
+    max-width: 1600px !important; /* Increased from 1100px */
+  }
+}
+
+/* 2. Increase font sizes for readability */
+/* Overall Summary */
+.summary-metric .metric-label {
+    font-size: 1rem; /* Was 0.9rem */
+}
+.summary-metric .metric-value {
+    font-size: 1.5rem; /* Was 1.3rem */
+}
+
+/* Main Card Headers (WOA vs EWOA) */
+.comparison-card .step-header h2 {
+    font-size: 1.65rem; /* Was 1.5rem */
+}
+
+/* Main Card Metrics (Prediction, Confidence, etc.) */
+.comparison-metrics.simplified .metric-label {
+    font-size: 1rem; /* Was 0.9rem */
+}
+.comparison-metrics.simplified .metric-value {
+    font-size: 1.2rem; /* Was 1.1rem */
+}
+.comparison-metrics.simplified .metric-value.metric-features {
+    font-size: 0.95rem; /* Was 0.85rem */
+}
+
+/* Technical Details (Collapsible) */
+.comparison-metrics.nested-details .metric-label.nested {
+    font-size: 0.95rem; /* Was 0.85rem */
+}
+.comparison-metrics.nested-details .metric-value.nested {
+    font-size: 1rem; /* Was 0.9rem */
+}
+.comparison-metrics.nested-details .metric-value.metric-features.nested {
+    font-size: 0.9rem; /* Was 0.8rem */
+}
+
+/* Key Metrics Chart Header */
+#metrics-comparison-card h2 {
+    font-size: 1.65rem; /* Was 1.2rem in index.php */
+}
+
+/* TFC Card Headers */
+#woa-tfc-card h2, #ewoa-tfc-card h2 {
+    font-size: 1.65rem; /* Was 1.2rem in index.php */
+}
+
+/* TFC Table Text */
+.tfc-table-wrapper .data-table th,
+.tfc-table-wrapper .data-table td {
+    font-size: 0.95rem; /* Was 0.9rem in index.php */
+}
+
+/* 3. New Banner Styles for Ground Truth / Classification */
+.ground-truth-banner,
+.classification-banner {
+    text-align: left;
+    font-size: 1.05rem;
+    color: var(--text-header);
+    margin: 0.75rem 0;
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--border-radius-small);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.ground-truth-banner {
+    background-color: var(--accent-glow-tint);
+    border: 1px solid var(--accent-glow);
+}
+.classification-banner {
+    background-color: rgba(0,0,0,0.03);
+    border: 1px solid var(--border-color);
+}
+
+.ground-truth-banner .banner-icon,
+.classification-banner .banner-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 0.9rem;
+    flex-shrink: 0;
+}
+
+.ground-truth-banner .banner-icon {
+    background: var(--accent-glow);
+    color: #fff;
+}
+.classification-banner .banner-icon {
+    background: rgba(0,0,0,0.06);
+    color: var(--text-dark);
+}
+
+.ground-truth-banner strong {
+    color: var(--text-header);
+    font-weight: 700;
+}
+.classification-banner strong {
+    color: var(--text-header);
+    font-weight: 700;
+}
+
+/* Variations for success/failure */
+.ground-truth-banner.benign strong,
+.classification-banner.benign strong {
+    color: var(--accent-success);
+}
+.ground-truth-banner.malignant strong,
+.classification-banner.malignant strong {
+    color: var(--accent-warning);
+}
+.ground-truth-banner.warning,
+.classification-banner.warning {
+    background: var(--accent-warning-tint);
+    border-color: var(--accent-warning);
+}
+.ground-truth-banner.warning .banner-icon {
+    background: var(--accent-warning);
+    color: #fff;
+}
+.ground-truth-banner.warning strong,
+.classification-banner.warning strong {
+    color: var(--accent-warning);
+}
+
+.ground-truth-banner .tooltip-icon,
+.classification-banner .tooltip-icon {
+    margin-left: auto; /* Push tooltip icon to the far right */
+}
+/*
+ * ===============================================
+ * STYLES FOR COMPARISON PAGE (comparison.php)
+ * ===============================================
+ */
+
+/* 1. Widen page content */
+@media (min-width: 992px) {
+  #page-comparison .main-container {
+    max-width: 1600px !important; /* Increased from 1100px */
+  }
+}
+
+/* 2. Increase font sizes for readability */
+/* Overall Summary */
+#page-comparison .summary-metric .metric-label {
+    font-size: 1rem;
+}
+#page-comparison .summary-metric .metric-value {
+    font-size: 1.5rem;
+}
+
+/* Main Card Headers (WOA vs EWOA) */
+#page-comparison .comparison-card .step-header h2 {
+    font-size: 1.65rem;
+}
+
+/* Main Card Metrics (Prediction, Confidence, etc.) */
+#page-comparison .comparison-metrics.simplified .metric-label {
+    font-size: 1rem;
+}
+#page-comparison .comparison-metrics.simplified .metric-value {
+    font-size: 1.2rem;
+}
+#page-comparison .comparison-metrics.simplified .metric-value.metric-features {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    text-align: right;
+}
+
+/* Technical Details (Collapsible) */
+#page-comparison .comparison-metrics.nested-details .metric-label.nested {
+    font-size: 0.95rem;
+}
+#page-comparison .comparison-metrics.nested-details .metric-value.nested {
+    font-size: 1rem;
+}
+#page-comparison .comparison-metrics.nested-details .metric-value.metric-features.nested {
+    font-size: 0.9rem;
+    line-height: 1.5;
+    text-align: right;
+}
+
+/* Key Metrics Chart Header */
+#page-comparison #metrics-comparison-card h2 {
+    font-size: 1.65rem;
+}
+
+/* TFC Card Headers */
+#page-comparison #woa-tfc-card h2, 
+#page-comparison #ewoa-tfc-card h2 {
+    font-size: 1.65rem;
+}
+
+/* TFC Table Text */
+#page-comparison .tfc-table-wrapper .data-table th,
+#page-comparison .tfc-table-wrapper .data-table td {
+    font-size: 0.95rem;
+}
+
+/* 3. New Banner Styles for Ground Truth / Classification */
+#page-comparison .ground-truth-banner,
+#page-comparison .classification-banner {
+    text-align: left;
+    font-size: 1.1rem; /* Increased font size */
+    color: var(--text-header);
+    margin: 1rem auto; /* Centered with margin */
+    padding: 1rem 1.5rem; /* More padding */
+    border-radius: var(--border-radius); /* Softer corners */
+    display: flex;
+    align-items: center;
+    gap: 1rem; /* More space */
+    box-shadow: var(--shadow-medium); /* Make it "pop" */
+    max-width: 600px; /* Stop it from being too wide */
+    border-width: 2px; /* Thicker border */
+}
+
+#page-comparison .ground-truth-banner {
+    background-color: var(--accent-glow-tint);
+    border-color: var(--accent-glow);
+}
+#page-comparison .classification-banner {
+    background-color: rgba(0,0,0,0.03);
+    border-color: var(--border-color);
+}
+
+#page-comparison .ground-truth-banner .banner-icon,
+#page-comparison .classification-banner .banner-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px; /* Bigger icon */
+    height: 28px;
+    border-radius: 50%;
+    font-weight: 700;
+    font-size: 1.1rem; /* Bigger icon font */
+    flex-shrink: 0;
+}
+
+#page-comparison .ground-truth-banner .banner-icon {
+    background: var(--accent-glow);
+    color: #fff;
+}
+#page-comparison .classification-banner .banner-icon {
+    background: rgba(0,0,0,0.08);
+    color: var(--text-dark);
+}
+
+#page-comparison .ground-truth-banner strong,
+#page-comparison .classification-banner strong {
+    font-size: 1.15rem; /* Larger text */
+    font-weight: 700;
+    color: var(--text-header);
+}
+
+/* Variations for success/failure */
+#page-comparison .ground-truth-banner.benign strong,
+#page-comparison .classification-banner.benign strong {
+    color: var(--accent-success);
+}
+#page-comparison .ground-truth-banner.malignant strong,
+#page-comparison .classification-banner.malignant strong {
+    color: var(--accent-warning);
+}
+#page-comparison .ground-truth-banner.warning,
+#page-comparison .classification-banner.warning {
+    background: var(--accent-warning-tint);
+    border-color: var(--accent-warning);
+}
+#page-comparison .ground-truth-banner.warning .banner-icon {
+    background: var(--accent-warning);
+    color: #fff;
+}
+#page-comparison .ground-truth-banner.warning strong,
+#page-comparison .classification-banner.warning strong {
+    color: var(--accent-warning);
+}
+
+#page-comparison .ground-truth-banner .tooltip-icon,
+#page-comparison .classification-banner .tooltip-icon {
+    margin-left: auto; /* Push tooltip icon to the far right */
+}
+
+/* 4. Fix for cut-off technical details */
+#page-comparison .collapsible-content.is-visible,
+#page-comparison .collapsible-content.active,
+#page-comparison #woa-details-content.active, /* Cover all bases */
+#page-comparison #ewoa-details-content.active {
+  max-height: 1000px !important; /* Use a large fixed value */
+  opacity: 1 !important;
+}
+
+/* 5. Confusion Matrix Styles (Table-based) */
+#page-comparison .confusion-matrix-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem; /* Tighter gap */
+}
+#page-comparison .confusion-matrix-wrapper h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-header);
+}
+#page-comparison .matrix-container {
+  position: relative;
+  width: 100%;
+  max-width: 400px;
+  padding-left: 50px; /* Space for Y-axis label */
+  padding-top: 30px; /* Space for X-axis label */
+}
+#page-comparison .matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-small);
+  background: var(--bg-mid);
+  overflow: hidden; /* Ensures border-radius clips cells */
+}
+#page-comparison .matrix-table th, 
+#page-comparison .matrix-table td {
+  border: 1px solid var(--border-color);
+  padding: 1rem;
+  text-align: center;
+  vertical-align: middle;
+  height: 100px;
+  width: 100px;
+}
+/* Header cells (Actual: Pos/Neg) */
+#page-comparison .matrix-table thead th {
+  background: var(--bg-dark);
+  font-weight: 700;
+  color: var(--text-dark);
+  font-size: 1rem;
+  padding: 0.75rem;
+  height: auto;
+}
+#page-comparison .matrix-table thead th:first-child {
+  border: none;
+  background: none;
+}
+/* Row Header cells (Predicted: Pos/Neg) */
+#page-comparison .matrix-table tbody th {
+  font-weight: 700;
+  color: var(--text-dark);
+  font-size: 1rem;
+  width: 100px;
+  background: var(--bg-dark);
+}
+/* Main data cells */
+#page-comparison .matrix-cell {
+  transition: all 0.3s ease;
+}
+#page-comparison .matrix-value {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-header);
+  margin-bottom: 0.25rem;
+}
+#page-comparison .matrix-label {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+}
+
+/* Axis Labels */
+#page-comparison .matrix-label-y, 
+#page-comparison .matrix-label-x {
+  position: absolute;
+  color: var(--text-dark);
+  font-weight: 700;
+  font-size: 1rem;
+  z-index: 1;
+}
+#page-comparison .matrix-label-y {
+  transform: rotate(-90deg);
+  left: -5px;
+  top: 55%;
+  transform-origin: left top;
+}
+#page-comparison .matrix-label-x {
+  top: 5px;
+  left: calc(50px + (100% - 50px) / 2);
+  transform: translateX(-50%);
+}
+
+/* Active Cell Highlighting */
+#page-comparison .matrix-cell.is-active {
+  box-shadow: inset 0 0 0 3px var(--accent-glow);
+}
+#page-comparison .matrix-cell.is-active .matrix-value {
+  color: var(--accent-glow);
+  font-size: 1.35rem;
+}
+/* TP/TN Success */
+#page-comparison .matrix-cell.is-active.matrix-tp,
+#page-comparison .matrix-cell.is-active.matrix-tn {
+  box-shadow: inset 0 0 0 3px var(--accent-success);
+}
+#page-comparison .matrix-cell.is-active.matrix-tp .matrix-value,
+#page-comparison .matrix-cell.is-active.matrix-tn .matrix-value {
+  color: var(--accent-success);
+}
+/* FP/FN Warning */
+#page-comparison .matrix-cell.is-active.matrix-fp,
+#page-comparison .matrix-cell.is-active.matrix-fn {
+  box-shadow: inset 0 0 0 3px var(--accent-warning);
+}
+#page-comparison .matrix-cell.is-active.matrix-fp .matrix-value,
+#page-comparison .matrix-cell.is-active.matrix-fn .matrix-value {
+  color: var(--accent-warning);
+}
+
+
+/* 6. TFC Card Layout (No Chart) */
+#page-comparison .tfc-layout-container {
+  display: block; /* Override flex */
+}
+#page-comparison .tfc-chart-wrapper {
+  display: none; /* Hide chart wrapper */
+}
+#page-comparison .tfc-table-wrapper {
+  flex: none; /* Remove flex property */
+  min-width: 100%;
+}
+/* Make feature-only table full width */
+#page-comparison #woa-tfc-card .data-table,
+#page-comparison #ewoa-tfc-card .data-table {
+    table-layout: auto; /* Let browser decide widths */
+    width: 100%;
+}
+#page-comparison #woa-tfc-card .data-table th,
+#page-comparison #ewoa-tfc-card .data-table th {
+    width: 100%;
+    text-align: left;
+}
+#page-comparison #woa-tfc-card .data-table td,
+#page-comparison #ewoa-tfc-card .data-table td {
+    font-weight: 600;
+    color: var(--text-header);
+}
+
+/* 7. Main 2-Column Layout */
+#page-comparison .comparison-column {
+    display: flex;
+    flex-direction: column;
+    gap: 2rem; /* Matches the grid gap */
+    padding: 1.5rem;
+    border-radius: var(--border-radius);
+    border: 1px solid var(--border-color);
+}
+
+/* Add a subtle background to the WOA (left) column */
+#page-comparison #woa-column {
+    background: rgba(0,0,0,0.015);
+    border-color: var(--border-color);
+}
+
+/* Add a subtle background to the EWOA (right) column */
+#page-comparison #ewoa-column {
+    border: 1px solid var(--accent-glow-tint);
+    background: var(--accent-glow-tint);
+}
+
+/* 8. NEW: Button Width Fix */
+/* This overrides the .btn-primary-full { width: 100% } rule */
+#page-comparison .form-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+#page-comparison #run-comparison-btn {
+    width: auto; /* Let it size to its content */
+    flex-grow: 1; /* Allow it to grow */
+    max-width: 400px; /* But cap its width */
+}
+#page-comparison #reset-btn {
+    width: auto; /* Let it size to its content */
+    flex-grow: 0;
+    flex-shrink: 0;
+}
+
