@@ -417,7 +417,7 @@ python3 -m woa_tool.cli predict --model models/model_ewoa.json --image data/test
 python3 -m woa_tool.cli set-tau --model models/model_ewoa.json --tau 1.0014
 
 # Compare EWOA vs WOA on one image
-python3 compare_woa_ewoa.py \
+python3 compare_predict.py \
   --image data/test_images/1-002.jpg \
   --ewoa models/model_ewoa.json \
   --woa  models/model_woa.json
