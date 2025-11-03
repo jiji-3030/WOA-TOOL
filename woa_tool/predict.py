@@ -13,17 +13,14 @@ from .abnormality import infer_abnormality
 # Utilities
 # -----------------------
 def _resolve_tau(model_path: str, cfg: dict, tau_override: Optional[float]) -> float:
-    """Determine τ with sensible precedence."""
-    # 1) explicit arg
+    """Determine τ with sensible precedence (arg -> env -> sidecar -> tau_train -> tau -> 1.0)."""
     if tau_override is not None:
         return float(tau_override)
-    # 2) environment variable
     if "TAU_OVERRIDE" in os.environ:
         try:
             return float(os.environ["TAU_OVERRIDE"])
         except Exception:
             pass
-    # 3) sidecar file "<model>.tau"
     sidecar = model_path + ".tau"
     if os.path.isfile(sidecar):
         try:
@@ -31,7 +28,11 @@ def _resolve_tau(model_path: str, cfg: dict, tau_override: Optional[float]) -> f
                 return float(f.read().strip())
         except Exception:
             pass
-    # 4) model JSON
+    if "tau_train" in cfg and cfg["tau_train"] is not None:
+        try:
+            return float(cfg["tau_train"])
+        except Exception:
+            pass
     try:
         return float(cfg.get("tau", 1.0))
     except Exception:
@@ -55,38 +56,104 @@ def _standardize_and_select(
     return z_full, z_sel
 
 
+def _np_from(cfg: dict, *keys: str, required: bool = False, cast=float) -> Optional[np.ndarray]:
+    """Fetch a numpy array from cfg using the first available key in keys."""
+    for k in keys:
+        if k in cfg and cfg[k] is not None:
+            try:
+                return np.array(cfg[k], dtype=cast)
+            except Exception:
+                pass
+    if required:
+        raise KeyError(f"Missing required key(s): {keys}")
+    return None
+
+
+def _load_centers_and_cov(cfg: dict, d_sel: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Return (mu_B, mu_M, Sp_inv) in the standardized + selected space.
+    Priority:
+      1) class_stats with mu (+sigma) and/or Sp_inv
+      2) explicit alternates (rare)
+      3) identity + zero centers (warn) so prediction still runs
+    """
+    cs = cfg.get("class_stats")
+    if isinstance(cs, dict):
+        mu_B = None
+        mu_M = None
+        for kB in ("0", "Benign", 0):
+            if kB in cs and "mu" in cs[kB]:
+                mu_B = np.array(cs[kB]["mu"], dtype=float); break
+        for kM in ("1", "Malignant", 1):
+            if kM in cs and "mu" in cs[kM]:
+                mu_M = np.array(cs[kM]["mu"], dtype=float); break
+
+        if "Sp_inv" in cfg:
+            Sp_inv = np.array(cfg["Sp_inv"], dtype=float)
+        else:
+            # try to build diag pooled from per-class sigma if provided
+            sigB = None; sigM = None
+            for kB in ("0", "Benign", 0):
+                if kB in cs and "sigma" in cs[kB]:
+                    sigB = np.array(cs[kB]["sigma"], dtype=float); break
+            for kM in ("1", "Malignant", 1):
+                if kM in cs and "sigma" in cs[kM]:
+                    sigM = np.array(cs[kM]["sigma"], dtype=float); break
+            if sigB is not None and sigM is not None:
+                var_pooled = 0.5 * (sigB**2 + sigM**2) + 1e-6
+                Sp_inv = np.diag(1.0 / var_pooled)
+            else:
+                Sp_inv = np.eye(d_sel, dtype=float)
+
+        if mu_B is not None and mu_M is not None:
+            return mu_B, mu_M, Sp_inv
+
+    # explicit alternates if present
+    mu_b_alt = _np_from(cfg, "mu_b_all", "mu_B")
+    mu_m_alt = _np_from(cfg, "mu_m_all", "mu_M")
+    Sp_inv_alt = _np_from(cfg, "S_inv_diag_all", "Sp_inv")
+    if mu_b_alt is not None and mu_m_alt is not None:
+        if Sp_inv_alt is None:
+            Sp_inv_alt = np.eye(d_sel, dtype=float)
+        return mu_b_alt, mu_m_alt, Sp_inv_alt
+
+    # last resort
+    print("⚠️  Warning: model JSON lacks class centers/covariance; "
+          "using zero centers and identity covariance in selected z-space.", flush=True)
+    return np.zeros(d_sel, dtype=float), np.zeros(d_sel, dtype=float), np.eye(d_sel, dtype=float)
+
+
 # -----------------------
 # Main prediction
 # -----------------------
 def predict(model_path: str, image_path: str, tau_override: Optional[float] = None) -> Dict:
     """
     Predict class and infer abnormality for a new mammogram image using the
-    Mahalanobis ratio classifier trained in train_and_eval.py.
+    Mahalanobis ratio classifier.
 
     Decision rule:
         malignant (1) if d_M <= τ * d_B  else benign (0)
-    where distances are Mahalanobis in the standardized, selected feature space.
+
+    Output format matches your original (includes tau, ratio_decision, explanation)
+    PLUS the extra fields you requested from compare_predict.py.
     """
     # --- Load model ---
-    with open(model_path, "r") as f:
+    with open(model_path, "r", encoding="utf-8") as f:
         cfg = json.load(f)
 
     feature_names: List[str] = cfg["feature_names"]
     selected_idx: List[int] = cfg.get("selected_idx", list(range(len(feature_names))))
     selected_names: List[str] = cfg.get("selected_names", [feature_names[i] for i in selected_idx])
 
-    # training normalization stats (global)
-    train_mu = np.array(cfg["train_mu"], dtype=float)
-    train_sigma = np.array(cfg["train_sigma"], dtype=float)
+    # training normalization stats (prefer new train.py keys)
+    train_mu  = _np_from(cfg, "global_mu", "train_mu", required=True)
+    train_sigma = _np_from(cfg, "global_sigma", "train_sigma", required=True)
 
-    # class stats in standardized space (selected features)
-    mu_B = np.array(cfg["class_stats"]["0"]["mu"], dtype=float)
-    mu_M = np.array(cfg["class_stats"]["1"]["mu"], dtype=float)
+    # centers/covariance in standardized + selected space
+    d_sel = len(selected_idx)
+    mu_B, mu_M, Sp_inv = _load_centers_and_cov(cfg, d_sel)
 
-    # pooled inverse covariance in standardized space
-    Sp_inv = np.array(cfg["Sp_inv"], dtype=float)
-
-    # resolve τ automatically (arg → env → sidecar → JSON → default)
+    # resolve τ automatically (arg → env → sidecar → tau_train → tau → default)
     tau = _resolve_tau(model_path, cfg, tau_override)
 
     # --- Validate image path ---
@@ -126,7 +193,20 @@ def predict(model_path: str, image_path: str, tau_override: Optional[float] = No
     # --- Infer abnormality and background tissue ---
     abn_label, abn_scores, abn_expl, background = infer_abnormality(zscores_dict)
 
-    # --- Per-feature contribution (heuristic) ---
+    # --- Per-feature contribution direction using quadratic-form deltas ---
+    # delta = eM - eB; negative => towards malignant; positive => towards benign
+    AvB, AvM = Sp_inv @ vB, Sp_inv @ vM
+    eB, eM = vB * AvB, vM * AvM
+    delta = eM - eB
+
+    names_mal = [selected_names[i] for i in np.where(delta < 0)[0]]
+    names_ben = [selected_names[i] for i in np.where(delta > 0)[0]]
+
+    total_detected = len(selected_names)
+    total_mal = int((delta < 0).sum())
+    total_ben = int((delta > 0).sum())
+
+    # --- Per-feature contribution (size-weighted, for top list) ---
     mu_ref = mu_M if pred_class == 1 else mu_B
     contrib_raw = np.abs(z_sel - mu_ref)
     contrib_norm = contrib_raw / (np.sum(contrib_raw) + 1e-9)
@@ -148,11 +228,19 @@ def predict(model_path: str, image_path: str, tau_override: Optional[float] = No
         "abnormality_scores": abn_scores if isinstance(abn_scores, dict) else {},
         "background_tissue": background,
         "explanation": {
-            "class": [f"Mahalanobis ratio: dM <= {tau:.3f} * dB → {pred_label}"],
+            "class": [f"Mahalanobis ratio: dM <= {tau:.3f} * dB \u2192 {pred_label}"],
             "abnormality_summary": str(abn_expl),
         },
         "zscores": zscores_dict,
         "top_feature_contributors": top_features,
+
+        # === Added fields (from comparison.py style) ===
+        "total number of features detected": total_detected,
+        "total number of \"towards malignant\"": total_mal,
+        "total number of \"towards benign\"": total_ben,
+        "name of malignant features": ", ".join(names_mal) if names_mal else "(none)",
+        "name of benign features": ", ".join(names_ben) if names_ben else "(none)",
+        "name of all detected features": ", ".join(selected_names) if selected_names else "(none)",
     }
 
     if "Mass" in abn_label or "Calcifications" in abn_label:
