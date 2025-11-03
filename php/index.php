@@ -155,11 +155,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
 
                     if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
                         // --- Normalize abnormality_type (Seems okay based on your JSON example) ---
-                         if (!isset($decoded['abnormality_type'])) {
-                             if (isset($decoded['abnormality']['type'])) { $decoded['abnormality_type'] = $decoded['abnormality']['type']; }
-                             elseif (isset($decoded['abnormality'])) { $decoded['abnormality_type'] = is_array($decoded['abnormality']) ? ($decoded['abnormality']['label'] ?? null) : $decoded['abnormality']; }
-                             elseif (isset($decoded['lesion_type'])) { $decoded['abnormality_type'] = $decoded['lesion_type']; }
-                       }
+                        if (!isset($decoded['abnormality_type'])) {
+                            if (isset($decoded['abnormality']['type'])) { $decoded['abnormality_type'] = $decoded['abnormality']['type']; }
+                            elseif (isset($decoded['abnormality'])) { $decoded['abnormality_type'] = is_array($decoded['abnormality']) ? ($decoded['abnormality']['label'] ?? null) : $decoded['abnormality']; }
+                            elseif (isset($decoded['lesion_type'])) { $decoded['abnormality_type'] = $decoded['lesion_type']; }
+                        }
                         // --- end normalization ---
                         $result = $decoded;
                     } else {
@@ -194,7 +194,7 @@ if (!empty($_POST['ajax'])) {
     $noise = ob_get_clean();
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
-    'ok'    => (bool) $result && !$error,
+    'ok'     => (bool) $result && !$error,
     'result' => $result,
     'image'  => $uploadedImageWebPath ?: null,
     'error'  => $error,
@@ -220,8 +220,209 @@ ob_end_clean();
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=27"> <!-- Increment version -->
+    <link rel="stylesheet" href="style.css?v=30"> <!-- Increment version -->
     
+    <!-- NEW Styles for sticky column and legend -->
+    <style>
+        /* === Color Palette (from comparison.php) === */
+        :root {
+            --color-benign-text: #064E3B; /* dark green */
+            --color-benign-bg: #D1FAE5; /* pastel green */
+            --color-malignant-text: #991B1B; /* dark red */
+            --color-malignant-bg: #FEE2E2; /* pastel red */
+        }
+        
+        .left-column.is-sticky {
+            position: sticky;
+            top: 2rem; /* Adjust as needed */
+            align-self: flex-start; /* Important for sticky to work in flex */
+        }
+        .sticky-controls {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: -1rem; /* Pull it closer to the card */
+            padding-right: 1rem;
+            position: relative;
+            z-index: 10;
+        }
+        #toggle-sticky-btn {
+            padding: 0.35rem 0.6rem;
+            display: inline-flex;
+            align-items: center;
+        }
+        #toggle-sticky-btn svg {
+            margin-right: 0.4rem;
+        }
+        
+        .birads-legend {
+            margin-top: 1.5rem;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+        }
+        .legend-title {
+            font-size: 0.875rem; /* text-sm */
+            font-weight: 600; /* semibold */
+            color: var(--text-dark);
+            margin-bottom: 0.75rem;
+        }
+        .legend-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 0.5rem;
+        }
+        .legend-item .birads-badge {
+            flex-shrink: 0;
+            margin-top: 0.1rem;
+            margin-right: 0.75rem;
+        }
+        .legend-item p {
+            font-size: 0.8rem; /* smaller */
+            color: var(--text-dark);
+            line-height: 1.4;
+        }
+        .legend-item p strong {
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        /* === NEW BI-RADS T-STYLES (Pastel Colors) === */
+        .birads-badge.birads-t1 {
+            background-color: #E0F2FE; /* pastel blue */
+            color: #0C4A6E; /* dark blue text */
+        }
+        .birads-badge.birads-t2 {
+            background-color: #D1FAE5; /* pastel green */
+            color: #064E3B; /* dark green text */
+        }
+        .birads-badge.birads-t3 {
+            background-color: #FEF3C7; /* pastel yellow */
+            color: #92400E; /* dark yellow/brown text */
+        }
+        .birads-badge.birads-t4 {
+            background-color: #FEE2E2; /* pastel red */
+            color: #991B1B; /* dark red text */
+        }
+        
+        /* === NEW Color Coding for Tables === */
+        .text-benign { color: var(--color-benign-text) !important; }
+        .bg-benign-light { background-color: var(--color-benign-bg) !important; }
+        .text-malignant { color: var(--color-malignant-text) !important; }
+        .bg-malignant-light { background-color: var(--color-malignant-bg) !important; }
+        
+        /* Apply to table rows */
+        .data-table tbody tr.row-benign td {
+            color: var(--color-benign-text);
+        }
+        .data-table tbody tr.row-malignant td {
+            color: var(--color-malignant-text);
+        }
+        /* Color for the numeric value */
+        .data-table tbody tr.row-benign td.mono strong,
+        .data-table tbody tr.row-benign td.mono {
+            color: var(--color-benign-text) !important;
+            font-weight: 600;
+        }
+        .data-table tbody tr.row-malignant td.mono strong,
+        .data-table tbody tr.row-malignant td.mono {
+            color: var(--color-malignant-text) !important;
+            font-weight: 600;
+        }
+        /* Light pastel background on hover */
+        .data-table tbody tr.row-benign:hover {
+            background-color: var(--color-benign-bg);
+        }
+        .data-table tbody tr.row-malignant:hover {
+            background-color: var(--color-malignant-bg);
+        }
+        
+        /* === NEW Sub-headers (like comparison.php) === */
+        .chart-sub-header {
+            font-size: 1.1rem; /* 1.25rem; */
+            font-weight: 600;
+            color: var(--text-header, #333);
+            margin-top: 1.5rem;
+            margin-bottom: 0.25rem;
+            padding-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border-color, #e0e0e0);
+        }
+        .chart-sub-header:first-of-type {
+            margin-top: 0;
+        }
+        .chart-sub-desc {
+            font-size: 0.9rem;
+            color: var(--text-dark, #555);
+            margin-bottom: 1rem;
+        }
+
+        /* === NEW Layout for split charts/tables === */
+        .split-layout-container {
+            display: grid;
+            grid-template-columns: 1fr; /* Stack on small screens */
+            gap: 1.5rem 1rem;
+        }
+        .split-chart-wrapper {
+            height: 300px; /* Default height */
+        }
+        
+        /* Side-by-side on larger screens */
+        @media (min-width: 1024px) {
+             .split-layout-container {
+                grid-template-columns: 1fr 1fr; /* 50/50 split */
+             }
+        }
+        
+        /* === NEW Distance Metrics Display === */
+        .distance-metrics {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+        .distance-metric {
+            padding: 0.75rem;
+            border-radius: var(--border-radius-small);
+            text-align: center;
+        }
+        .distance-metric .metric-label {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-dark);
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+        .distance-metric .metric-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+        
+        /* === NEW: Layout for split charts/tables (from comparison.php) === */
+        .split-layout-container {
+            display: grid;
+            grid-template-columns: 1fr; /* Stack on small screens */
+            gap: 1.5rem 1rem;
+        }
+        .split-chart-wrapper {
+             /* Height will be set by JS */
+        }
+        @media (min-width: 1024px) {
+             .split-layout-container {
+                grid-template-columns: 1fr 1fr; /* 50/50 split */
+             }
+        }
+        
+        /* === NEW: Layout for single table/chart in "All Features" === */
+        .all-features-table-wrapper .table-wrapper-scroll {
+            max-height: 600px; /* Taller default for single table */
+        }
+        .all-features-chart-wrapper {
+             /* Height will be set by JS */
+        }
+        
+        /* === END NEW STYLES === */
+    </style>
     
     <script src="https://cdn.jsdelivr.net/npm/tiff.js@1.0.0/tiff.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -248,10 +449,23 @@ ob_end_clean();
     <div class="main-container">
         <header class="header">
              <h1> <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C10.14 2 8.5 3.65 8.5 5.5C8.5 6.4 8.89 7.2 9.5 7.82C7.03 8.35 5.3 10.13 5.3 12.39C5.3 13.53 5.79 14.58 6.6 15.35C5.59 16.32 5 17.58 5 19C5 21.21 6.79 23 9 23C10.86 23 12.5 21.35 12.5 19.5C12.5 18.6 12.11 17.8 11.5 17.18C13.97 16.65 15.7 14.87 15.7 12.61C15.7 11.47 15.21 10.42 14.4 9.65C15.41 8.68 16 7.42 16 6C16 3.79 14.21 2 12 2M12 4C13.1 4 14 4.9 14 6C14 7.03 13.2 7.9 12.18 7.97C12.12 7.99 12.06 8 12 8C10.9 8 10 7.1 10 6C10 4.9 10.9 4 12 4M9 21C7.9 21 7 20.1 7 19C7 17.97 7.8 17.1 8.82 17.03C8.88 17.01 8.94 17 9 17C10.1 17 11 17.9 11 19C11 20.1 10.1 21 9 21" /></svg> EWOA Breast Cancer Feature Detection </h1>
-             <div class="quick-guide"> <h3> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg> Quick Start Guide </h3> <ul> <li><strong>Step 1:</strong> Upload mammogram (<code>.png</code>, <code>.jpg</code>, <code>.tif</code>).</li> <li><strong>Step 2:</strong> Click <strong>Run Prediction</strong>.</li> <li><strong>Step 3:</strong> View results.</li> </ul> </div>
+             <div class="quick-guide"> <h3> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" /></svg> Quick Start Guide </h3> <ul> <li><strong>Step 1:</strong> Upload mammogram (<code>.png</code>, <code>.jpg</code>, <code>.tif</code>).</li> <li><strong>Step 2:</strong> Click <strong>Run Prediction</strong>.</li> <li><strong>Step 3:</strong> View results.</li> <li><strong>Step 4:</strong> Check <strong>History</strong> for past runs.</li> </ul> </div>
         </header>
 
         <div class="left-column">
+            <!-- NEW STICKY CONTROLS -->
+            <div class="sticky-controls">
+                <button type="button" id="toggle-sticky-btn" class="btn btn-secondary btn-small" title="Toggle Sticky Panel" aria-pressed="false">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="pin-icon">
+                        <path d="M4.146.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1 0 .708l-2 2a.5.5 0 0 1-.708-.708L5.793 3 4.146 1.354a.5.5 0 0 1 0-.708zm0 15.708a.5.5 0 0 1 .708 0l2-2a.5.5 0 0 1 0-.708l-2-2a.5.5 0 0 1-.708.708L5.793 13l-1.647-1.646a.5.5 0 0 1 0-.708zM1.146 8.354a.5.5 0 0 1 0-.708l2-2a.5.5 0 0 1 .708.708L2.207 8l1.647 1.646a.5.5 0 0 1-.708.708l-2-2zM4 8a.5.5 0 0 1 .5-.5h7.5a.5.5 0 0 1 0 1H4.5A.5.5 0 0 1 4 8z"/>
+                    </svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="unpin-icon" style="display:none;">
+                        <path d="M4.146.146a.5.5 0 0 1 .708 0l2 2a.5.5 0 0 1 0 .708l-2 2a.5.5 0 0 1-.708-.708L5.793 3 4.146 1.354a.5.5 0 0 1 0-.708zM8 4a.5.5 0 0 1 .5.5v7.5a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4zM1.146 8.354a.5.5 0 0 1 0-.708l2-2a.5.5 0 0 1 .708.708L2.207 8l1.647 1.646a.5.5 0 0 1-.708.708l-2-2zM4 8a.5.5 0 0 1 .5-.5h7.5a.5.5 0 0 1 0 1H4.5A.5.5 0 0 1 4 8z"/>
+                    </svg>
+                    <span id="sticky-btn-text">Pin Panel</span>
+                </button>
+            </div>
+
             <div class="step-card">
                 <div class="step-header">
                     <div class="step-header-left"> <div class="step-number">1</div> <h2><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg> Upload Image</h2> </div>
@@ -276,6 +490,29 @@ ob_end_clean();
                 <button class="btn" type="submit" id="submit-btn" disabled form="image-upload-form"> <span id="btn-text">Run Prediction</span> <div class="spinner" id="spinner" style="display:none;"></div> </button>
                 <button class="btn btn-secondary" type="button" id="clear-btn" style="margin-top:0; margin-left:.75rem; display: none;">↺ Reset</button>
             </div>
+            
+            <!-- NEW HISTORY CARD -->
+            <div class="step-card" id="history-card">
+                <div class="step-header">
+                    <div class="step-header-left">
+                        <div class="step-number" style="background-color: var(--text-dark); box-shadow: none;">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px; color: white;"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.183m-4.993 0H2.985" /></svg>
+                        </div>
+                        <h2>History</h2>
+                    </div>
+                    <button type="button" class="btn btn-secondary btn-small" id="clear-history-btn" title="Clear All History" style="display: none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="16" height="16"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12.54 0c-.265.11-.506.227-.745.357m0 0l-1.473 1.473a.875.875 0 000 1.238l9.19 9.19a.875.875 0 001.238 0l1.473-1.473m-7.407-13.87c.19-.148.39-.287.6-.41m0 0l4.773 4.773" /></svg>
+            
+                    </button>
+                </div>
+                <div class="card-content" id="history-list-container">
+                    <!-- History items will be injected here by JS -->
+                    <p class="file-meta" id="history-placeholder" style="text-align:center; padding: 1rem 0;">No history saved.</p>
+                    <div id="history-list"></div>
+                </div>
+            </div>
+            <!-- END HISTORY CARD -->
+
             <div id="error-container"></div>
         </div>
 
@@ -296,7 +533,7 @@ ob_end_clean();
 
                     <div class="results-grid" id="results-grid">
 
-                        <!-- === UPDATED: Prediction Card with Visualizer === -->
+                        <!-- === UPDATED: Prediction Card (Simplified) === -->
                         <div class="step-card prediction-card animate-slide-up" id="prediction-card-content">
                             <div class="step-header">
                                 <div class="step-header-left">
@@ -312,83 +549,7 @@ ob_end_clean();
                                         <span class="prediction-indicator"></span>
                                         <span style="font-size:3.5rem; font-weight:800;" data-field="final_prediction">—</span>
                                     </div>
-
-                                    <div class="toggle-wrapper" style="text-align: right; margin-top: 1.5rem; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap;">
-                                        <button type="button" class="btn-toggle-values" data-state="pct">
-                                            <span>Show Raw Values</span>
-                                        </button>
-                                        <button type="button" class="btn-toggle-details">
-                                            <span>Show Decision Logic</span>
-                                            <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708z"/></svg>
-                                        </button>
-                                    </div>
-
-                                    <div class="decision-details collapsible-content">
-                                        <table class="data-table" style="margin-top:.25rem;">
-                                            <tr>
-                                                <th class="dist-toggle-header" data-pct-text="d<sub>B</sub> (Rel. %)" data-raw-text="d<sub>B</sub> (Raw)">
-                                                    <span class="header-text">d<sub>B</sub> (Rel. %)</span> <span class="tooltip-icon">?<span class="tooltip-content">Relative distance to Benign centroid.</span></span>
-                                                </th>
-                                                <td data-field="distance_to_benign" data-raw-val="—" data-pct-val="—">—</td>
-                                            </tr>
-                                            <tr>
-                                                <th class="dist-toggle-header" data-pct-text="d<sub>M</sub> (Rel. %)" data-raw-text="d<sub>M</sub> (Raw)">
-                                                    <span class="header-text">d<sub>M</sub> (Rel. %)</span> <span class="tooltip-icon">?<span class="tooltip-content">Relative distance to Malignant centroid.</span></span>
-                                                </th>
-                                                <td data-field="distance_to_malignant" data-raw-val="—" data-pct-val="—">—</td>
-                                            </tr>
-                                            <tr>
-                                                <th class="dist-toggle-header" data-pct-text="τ (%)" data-raw-text="τ (Raw)">
-                                                    <span class="header-text">τ (%)</span> <span class="tooltip-icon">?<span class="tooltip-content">Decision threshold ratio as percentage. Raw value is the direct ratio.</span></span>
-                                                </th>
-                                                <td data-field="tau" data-raw-val="—" data-pct-val="—">—</td>
-                                            </tr>
-                                            <!-- ADD these rows inside the same <table class="data-table"> in the decision-details -->
-                                            <tr class="ratio-row">
-                                              <th class="dist-toggle-header"
-                                                  data-pct-text="d<sub>M</sub>/d<sub>B</sub> (%)"
-                                                  data-raw-text="d<sub>M</sub>/d<sub>B</sub> (Raw)">
-                                                <span class="header-text">d<sub>M</sub>/d<sub>B</sub> (%)</span>
-                                                <span class="tooltip-icon">?<span class="tooltip-content">
-                                                  Distance ratio r = d<sub>M</sub> / d<sub>B</sub>. Lower favors Malignant.
-                                                </span></span>
-                                              </th>
-                                              <td data-field="distance_ratio" data-raw-val="—" data-pct-val="—">—</td>
-                                            </tr>
-                                            <tr>
-                                              <th class="dist-toggle-header"
-                                                  data-pct-text="Malignant Margin (% over boundary)"
-                                                  data-raw-text="Malignant Margin (×)">
-                                                <span class="header-text">Malignant Margin (% over boundary)</span>
-                                                <span class="tooltip-icon">?<span class="tooltip-content">
-                                                  τ / r. &gt; 1 means inside malignant side by that factor (or %).
-                                                </span></span>
-                                              </th>
-                                              <td data-field="mal_margin" data-raw-val="—" data-pct-val="—">—</td>
-                                            </tr>
-                                            <tr>
-                                              <th class="dist-toggle-header"
-                                                  data-pct-text="Benign Margin (% over boundary)"
-                                                  data-raw-text="Benign Margin (×)">
-                                                <span class="header-text">Benign Margin (% over boundary)</span>
-                                                <span class="tooltip-icon">?<span class="tooltip-content">
-                                                  r / τ. &gt; 1 means inside benign side by that factor (or %).
-                                                </span></span>
-                                              </th>
-                                              <td data-field="ben_margin" data-raw-val="—" data-pct-val="—">—</td>
-                                            </tr>
-                                            <tr>
-                                              <th>Decision Verdict
-                                                <span class="tooltip-icon">?<span class="tooltip-content">
-                                                  Human-readable check of “Malignant if dM ≤ τ·dB”, with numbers.
-                                                </span></span>
-                                              </th>
-                                              <td data-field="decision_verdict">—</td>
-                                            </tr>
-                                            <tr> <th>Rule <span class="tooltip-icon">?<span class="tooltip-content">The rule used for the final decision based on raw values.</span></span></th> <td data-field="ratio_decision">—</td> </tr>
-                                        </table>
-                                        <p class="file-meta" id="decision-note" style="margin-top:.5rem; text-align: right;"> {/* JS fills this */} </p>
-                                    </div>
+                                    <!-- REMOVED TOGGLE WRAPPER AND DECISION-DETAILS DIV -->
                                 </div>
 
                                 <!-- Right side: Visualizer -->
@@ -408,7 +569,7 @@ ob_end_clean();
 
                         <div class="step-card animate-slide-up" id="probability-card-content" style="animation-delay:.1s;">
                             <div class="step-header">
-                                <div class="step-header-left"> <h2>Confidence by Class</h2> </div>
+                                <div class="step-header-left"> <h2>Probabilities</h2> </div>
                                 <span class="tooltip-icon">i<span class="tooltip-content">Model confidence per class. This visualization supports the final prediction but the decision uses the ratio rule (τ).</span></span>
                                 <button type="button" class="maximize-card-btn" title="Maximize"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" /></svg></button>
                             </div>
@@ -435,18 +596,40 @@ ob_end_clean();
                                     </div>
                                 </div>
                                 <p class="text-xs text-gray-500 mt-2" data-field="background_tissue_explain">—</p>
+                                
+                                <!-- === UPDATED LEGEND (T1, T2, T3, T4) === -->
+                                <div class="birads-legend">
+                                    <h4 class="legend-title">BI-RADS Density Legend</h4>
+                                    <div class="legend-item"><span class="birads-badge birads-t1">T1</span> <p><strong>Almost entirely fatty:</strong> The breasts are almost entirely composed of fat. (0-25% dense)</p></div>
+                                    <div class="legend-item"><span class="birads-badge birads-t2">T2</span> <p><strong>Scattered areas of fibroglandular density:</strong> There are scattered areas of density. (26-50% dense)</p></div>
+                                    <div class="legend-item"><span class="birads-badge birads-t3">T3</span> <p><strong>Heterogeneously dense:</strong> The breasts are heterogeneously dense, which may obscure small masses. (51-75% dense)</p></div>
+                                    <div class="legend-item"><span class="birads-badge birads-t4">T4</span> <p><strong>Extremely dense:</strong> The breasts are extremely dense, which lowers the sensitivity of mammography. (76-100% dense)</p></div>
+                                </div>
                             </div>
                             <!-- === END NEW Card Content Structure === -->
                         </div>
 
                         <div class="step-card animate-slide-up" id="explanation-card-content" style="animation-delay:.20s;">
                             <div class="step-header">
-                                <div class="step-header-left"> <h2>Explanations</h2> </div>
-                                <span class="tooltip-icon">i<span class="tooltip-content">AI-generated explanations for the prediction.</span></span>
+                                <div class="step-header-left"> <h2>Explanations & Distances</h2> </div>
+                                <!-- UPDATED Tooltip -->
+                                <span class="tooltip-icon">i<span class="tooltip-content">Analysis of features and distance metrics contributing to the prediction.</span></span>
                                 <button type="button" class="maximize-card-btn" title="Maximize"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" /></svg></button>
                             </div>
                             <div class="card-content" id="explain-root">
                                 <!-- Content generated by renderExplanations JS -->
+                                
+                                <!-- NEW: Distance Metrics Container -->
+                                <div class="distance-metrics">
+                                    <div class="distance-metric bg-benign-light">
+                                        <span class="metric-label">Distance to Benign</span>
+                                        <span class="metric-value text-benign" data-field="distance_to_benign">—</span>
+                                    </div>
+                                    <div class="distance-metric bg-malignant-light">
+                                        <span class="metric-label">Distance to Malignant</span>
+                                        <span class="metric-value text-malignant" data-field="distance_to_malignant">—</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -460,96 +643,115 @@ ob_end_clean();
                             </div>
                         </div>
 
-                        <!-- === MERGED: Top Features + Relative Chart === -->
+                        <!-- === NEW: Feature Contributions Card (like comparison.php) === -->
                         <div class="step-card animate-slide-up" id="tfc-card-content" style="animation-delay:.30s;">
-                          <div class="step-header">
-                            <div class="step-header-left">
-                              <h2>
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.31h5.518a.562.562 0 01.31.95l-4.203 3.03a.563.563 0 00-.182.635l1.578 4.87a.562.562 0 01-.84.61l-4.72-3.47a.563.563 0 00-.652 0l-4.72 3.47a.562.562 0 01-.84-.61l1.578-4.87a.563.563 0 00-.182-.635L2.543 9.87a.562.562 0 01.31-.95h5.518a.563.563 0 00.475-.31L11.48 3.5z"/></svg>
-                                Top Feature Contributors 
-                              </h2>
-                            </div>
-                            <span class="tooltip-icon">i
-                              <span class="tooltip-content">Features most influencing the decision (left) and their relative contribution (%) (right).</span>
-                            </span>
-                            <button type="button" class="maximize-card-btn" title="Maximize">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z"/></svg>
-                            </button>
-                          </div>
-
-                          <div class="card-content">
-                            <div class="tfc-layout-container">
-                              <!-- Left: table -->
-                              <div class="tfc-table-wrapper">
-                                <div class="table-wrapper-scroll" id="tfc-table-scroll">
-                                  <table class="data-table">
-                                    <thead>
-                                      <tr>
-                                        <th>Feature</th>
-                                        <th class="contrib-toggle-header" data-pct-text="Contribution (%)" data-raw-text="Contribution (Raw)">
-                                          <span class="header-text">Contribution (%)</span>
-                                        </th>
-                                      </tr>
-                                    </thead>
-                                    <tbody data-field="top_feature_contributors"></tbody>
-                                  </table>
-                                </div>
-                              </div>
-
-                              <!-- Right: stacked bar chart -->
-                              <div class="tfc-chart-wrapper" id="tfc-chart-wrapper">
-                                <canvas id="tfc-stacked"></canvas>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                        <!-- === END: Merged Card === -->
-
-
-                        <!-- === UPDATED: Z-Scores Card === -->
-                        <div class="step-card animate-slide-up" id="zscores-card-content" style="animation-delay:.45s;">
-                             <div class="step-header">
+                            <div class="step-header">
                                 <div class="step-header-left">
-                                      <h2>
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" /></svg>
-                                        Feature Z-Scores
-                                      </h2>
+                                    <h2>
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.31h5.518a.562.562 0 01.31.95l-4.203 3.03a.563.563 0 00-.182.635l1.578 4.87a.562.562 0 01-.84.61l-4.72-3.47a.563.563 0 00-.652 0l-4.72 3.47a.562.562 0 01-.84-.61l1.578-4.87a.563.563 0 00-.182-.635L2.543 9.87a.562.562 0 01.31-.95h5.518a.563.563 0 00.475-.31L11.48 3.5z"/></svg>
+                                        Feature Contributions (Benign vs. Malignant)
+                                    </h2>
                                 </div>
-                                <span class="tooltip-icon">i<span class="tooltip-content">Standardized values (z-scores) for all radiomic features, shown as percentiles. Chart shows all features.</span></span>
-                                <button type="button" class="maximize-card-btn" title="Maximize"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" /></svg></button>
-                             </div>
-                             <div class="card-content">
-                                <!-- NEW: Z-Score Layout Container -->
-                                <div class="zscore-layout-container">
-                                    <!-- Left Side: Table -->
-                                    <div class="zscore-table-wrapper">
-                                        <div class="table-wrapper-scroll"> <!-- Note: max-height will be set by JS -->
-                                             <table class="data-table">
-                                                 <thead>
-                                                     <tr>
-                                                         <th>Feature</th>
-                                                         <th class="zscore-toggle-header" data-pct-text="Percentile (%)" data-raw-text="Z-Score">
-                                                              <span class="header-text">Percentile (%)</span>
-                                                         </th>
-                                                     </tr>
-                                                 </thead>
-                                                 <tbody data-field="zscores">    </tbody>
-                                             </table>
+                                <span class="tooltip-icon">i
+                                    <span class="tooltip-content">Features from 'top_feature_contributors' separated by their leaning.</span>
+                                </span>
+                                <button type="button" class="maximize-card-btn" title="Maximize">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z"/></svg>
+                                </button>
+                            </div>
+
+                            <div class="card-content">
+                                <!-- Malignant Section -->
+                                <h3 class="chart-sub-header text-malignant">Malignant-Leaning Features</h3>
+                                <p class="chart-sub-desc">Features with a negative contribution (more negative is stronger).</p>
+                                <div class="split-layout-container">
+                                    <div class="tfc-table-wrapper">
+                                        <div class="table-wrapper-scroll" id="tfc-malignant-table-scroll" style="max-height: 300px;">
+                                            <table class="data-table">
+                                                <thead><tr><th>Feature</th><th>Contribution (Raw)</th></tr></thead>
+                                                <tbody id="tfc-malignant-body"></tbody>
+                                            </table>
                                         </div>
                                     </div>
-                                    <!-- Right Side: Chart -->
-                                    <div class="zscore-chart-wrapper"> <!-- Note: height will be set by JS -->
-                                         <canvas id="zscore-chart"></canvas>
+                                    <div class="split-chart-wrapper">
+                                        <canvas id="tfc-malignant-chart"></canvas>
                                     </div>
                                 </div>
-                             </div>
+
+                                <!-- Benign Section -->
+                                <h3 class="chart-sub-header text-benign">Benign-Leaning Features</h3>
+                                <p class="chart-sub-desc">Features with a positive contribution (more positive is stronger).</p>
+                                <div class="split-layout-container">
+                                    <div class="tfc-table-wrapper">
+                                        <div class="table-wrapper-scroll" id="tfc-benign-table-scroll" style="max-height: 300px;">
+                                            <table class="data-table">
+                                                <thead><tr><th>Feature</th><th>Contribution (Raw)</th></tr></thead>
+                                                <tbody id="tfc-benign-body"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="split-chart-wrapper">
+                                        <canvas id="tfc-benign-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <!-- === END: Z-Scores Card === -->
+                        <!-- === END: Feature Contributions Card === -->
+
+                        <!-- === NEW: All Detected Features (Tables) Card === -->
+                        <div class="step-card animate-slide-up" id="all-features-tables-card" style="animation-delay:.40s;">
+                                <div class="step-header">
+                                    <div class="step-header-left">
+                                        <h2>
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" /></svg>
+                                            All Detected Features (Tables)
+                                        </h2>
+                                    </div>
+                                    <span class="tooltip-icon">i<span class="tooltip-content">Standardized values (z-scores) for all radiomic features. Sorted from most Benign-leaning (positive) to most Malignant-leaning (negative).</span></span>
+                                    <button type="button" class="maximize-card-btn" title="Maximize"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" /></svg></button>
+                                </div>
+                                <div class="card-content">
+                                    <div class="all-features-table-wrapper">
+                                        <div class="table-wrapper-scroll" id="all-features-table-scroll">
+                                            <table class="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Feature</th>
+                                                        <th>Z-Score</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="all-features-body"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+                        </div>
+                        <!-- === END: All Features (Tables) Card === -->
+                        
+                        <!-- === NEW: All Detected Features (Charts) Card === -->
+                        <div class="step-card animate-slide-up" id="all-features-charts-card" style="animation-delay:.50s;">
+                                <div class="step-header">
+                                    <div class="step-header-left">
+                                        <h2>
+                                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" /></svg>
+                                            All Detected Features (Charts)
+                                        </h2>
+                                    </div>
+                                    <span class="tooltip-icon">i<span class="tooltip-content">Standardized values (z-scores) for all radiomic features. Sorted from most Benign-leaning (positive) to most Malignant-leaning (negative).</span></span>
+                                    <button type="button" class="maximize-card-btn" title="Maximize"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" /></svg></button>
+                                </div>
+                                <div class="card-content">
+                                    <div class="all-features-chart-wrapper">
+                                        <canvas id="all-features-chart"></canvas>
+                                    </div>
+                                </div>
+                        </div>
+                        <!-- === END: All Features (Charts) Card === -->
 
 
                     </div> </div>
             </div> <?php if ($result && !$isDebug): /* Keep this for raw JSON view if needed */ ?>
-                        <?php endif; ?>
+                            <?php endif; ?>
         </div> </div> <footer> <p>WOA & EWOA Breast Cancer Detection Tool. For research purposes only. Not for clinical use.</p> </footer>
 
     <div id="image-modal-overlay"></div>
@@ -578,6 +780,13 @@ ob_end_clean();
         const errorContainer = document.getElementById('error-container');
         const previewWrapper = document.getElementById('image-preview-wrapper');
         const resultsPlaceholder = document.getElementById('results-placeholder');
+        
+        // --- History Refs (NEW) ---
+        const historyCard = document.getElementById('history-card');
+        const historyList = document.getElementById('history-list');
+        const historyPlaceholder = document.getElementById('history-placeholder');
+        const clearHistoryBtn = document.getElementById('clear-history-btn');
+
 
         // === State ===
         let activeCharts = {}; // Use object to store charts by ID
@@ -585,162 +794,206 @@ ob_end_clean();
         const PRETTY_NAMES = window.__PRETTY_NAMES__ || {}; // Load pretty names
 
         // === Persisted state (localStorage) ===
-        const STORAGE_KEY = 'woa_result_state_v3'; // Incremented version
+        const STORAGE_KEY = 'woa_result_state_v3'; // Single key for last run
+        const HISTORY_KEY = 'woa_history_v1'; // NEW: Key for history array
+        
         function loadState() { try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
         function saveState(p) { try { const pr = loadState() || {}; let n = { ...pr, ...p, savedAt: Date.now() }; let pl = JSON.stringify(n); if (pl.length > 4_500_000) { delete n.previewDataUrl; pl = JSON.stringify(n); } localStorage.setItem(STORAGE_KEY, pl); } catch (e) { console.warn('State save failed:', e); } }
         function clearState() { try { localStorage.removeItem(STORAGE_KEY); } catch (e) {} }
 
+        // --- History Functions (NEW) ---
+        function loadHistory() {
+            try {
+                const h = localStorage.getItem(HISTORY_KEY);
+                return h ? JSON.parse(h) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+        function saveHistory(history) {
+            try {
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+            } catch (e) {
+                console.warn('History save failed:', e);
+            }
+        }
+        function addResultToHistory(payload) {
+            if (!payload?.result) return;
+            try {
+                let history = loadHistory();
+                const historyItem = {
+                    id: new Date().toISOString() + '_' + Math.random().toString(36).substring(2, 9),
+                    savedAt: Date.now(),
+                    result: payload.result,
+                    imagePath: payload.image,
+                    filename: fileInput?.files?.[0]?.name || 'N/A'
+                };
+                history.unshift(historyItem); // Add to beginning
+                if (history.length > 20) history.pop(); // Limit to 20 items
+                saveHistory(history);
+                renderHistory(); // Update UI
+            } catch (e) {
+                console.error("Failed to add to history:", e);
+            }
+        }
+        function renderHistory() {
+            const history = loadHistory();
+            if (history.length === 0) {
+                historyList.innerHTML = '';
+                historyPlaceholder.style.display = 'block';
+                clearHistoryBtn.style.display = 'none';
+                return;
+            }
+            historyPlaceholder.style.display = 'none';
+            clearHistoryBtn.style.display = 'inline-flex';
+            
+            historyList.innerHTML = history.map(item => {
+                const pred = item.result?.final_prediction || 'N/A';
+                const predClass = pred.toLowerCase().startsWith('mal') ? 'history-item-malignant' : 'history-item-benign';
+                const date = new Date(item.savedAt).toLocaleString(undefined, {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+                return `
+                    <div class="history-item" data-history-id="${escapeHTML(item.id)}">
+                        <div class="history-item-left">
+                            <span class="history-item-filename">${escapeHTML(item.filename)}</span>
+                            <span class="history-item-date">${escapeHTML(date)}</span>
+                        </div>
+                        <div class="history-item-right">
+                            <span class="pill ${predClass}">${escapeHTML(pred)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        // --- End History Functions ---
+
+
         // === Get Computed CSS Colors ===
         const computedStyles = getComputedStyle(document.documentElement);
         const chartColors = { 
+            // Main colors from CSS variables
             accentGlow: computedStyles.getPropertyValue('--accent-glow').trim(), 
             accentGlowTint: computedStyles.getPropertyValue('--accent-glow-tint').trim(), 
-            accentSuccess: computedStyles.getPropertyValue('--accent-success').trim(), 
-            accentWarning: computedStyles.getPropertyValue('--accent-warning').trim(), 
+            accentSuccess: computedStyles.getPropertyValue('--accent-success').trim() || 'rgba(46, 204, 113, 0.7)', 
+            accentWarning: computedStyles.getPropertyValue('--accent-warning').trim() || 'rgba(231, 76, 60, 0.7)', 
             textDark: computedStyles.getPropertyValue('--text-dark').trim(), 
             borderColor: computedStyles.getPropertyValue('--border-color').trim(), 
-            bgDark: computedStyles.getPropertyValue('--bg-dark').trim() 
+            bgDark: computedStyles.getPropertyValue('--bg-dark').trim(),
+            
+            // Pastel colors for charts (from comparison.php)
+            pastelBenign: 'rgba(132, 204, 145, 0.7)', // pastel green
+            pastelMalignant: 'rgba(252, 165, 165, 0.7)', // pastel red
+            
+            // Pastel colors for probability chart
+            probBenign: 'rgba(144, 238, 144, 0.8)', // light green
+            probMalignant: 'rgba(255, 182, 193, 0.8)'  // light pink
         };
         const PASTELS = ['rgba(99, 179, 237, 0.7)','rgba(132, 204, 145, 0.7)','rgba(250, 202, 154, 0.7)','rgba(196, 181, 253, 0.7)','rgba(252, 165, 165, 0.7)','rgba(153, 246, 228, 0.7)'];
-        // Dedicated pastel colors for the probability charts
-        const PASTEL_PROBS = {
-            benign: 'rgba(144, 238, 144, 0.8)',      // light green
-            malignant: 'rgba(255, 182, 193, 0.8)'    // light pink
-        };
-
+        
         // === Utility Functions ===
         function showError(m) { errorContainer.innerHTML = `<div class="step-card error-card animate-slide-up"><strong>Error:</strong> ${m}</div>`; }
         function renderToCanvas(f) { return new Promise((res, rej) => { const isTiff = f.type === 'image/tiff' || f.name.toLowerCase().endsWith('.tif') || f.name.toLowerCase().endsWith('.tiff'); const rdr = new FileReader(); if (isTiff) { rdr.onload = e => { try { Tiff.initialize({ TOTAL_MEMORY: 16777216 * 10 }); const tiff = new Tiff({ buffer: e.target.result }); res(tiff.toCanvas()); } catch (err) { rej(err); } }; rdr.onerror = rej; rdr.readAsArrayBuffer(f); } else { rdr.onload = e => { const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0); res(c); }; img.onerror = rej; img.src = e.target.result; }; rdr.onerror = rej; rdr.readAsDataURL(f); } }); }
         function scaleCanvasToFit(sC, mW, mH) { const w = sC.width, h = sC.height; const sc = Math.min(mW / w, mH / h, 1); const o = document.createElement('canvas'); o.width = Math.round(w * sc); o.height = Math.round(h * sc); o.getContext('2d').drawImage(sC, 0, 0, o.width, o.height); return o; }
         function displayCanvas(c, cE) { const eC = cE.querySelector('canvas'); if (eC) eC.remove(); cE.prepend(c); cE.style.display = 'flex'; }
-        function handleFileSelect() { if (fileInput.files.length > 0) { const f = fileInput.files[0]; renderToCanvas(f).then(rC => { const mW = previewWrapper.clientWidth || 900; const mH = 400; const sc = scaleCanvasToFit(rC, mW, mH); previewWrapper.dataset.fullImage = rC.toDataURL(); displayCanvas(sc, previewWrapper); const nE = document.getElementById('image-filename'); if (nE) { nE.textContent = f.name; nE.style.display = 'block'; } submitBtn.disabled = false; clearBtn.style.display = 'inline-flex'; uploadArea.style.display = 'none'; }).catch(err => { console.error(err); showError('Could not read or render image.'); }); } }
-        function closeCardModal() { cardModalOverlay.classList.remove('visible'); document.body.style.overflow = ''; cardModalBody.innerHTML = ''; currentMaximizedChartId = null; /* Destroy modal chart instance if exists */ }
+        function handleFileSelect(file) {
+            if (!file) {
+                if (fileInput.files.length > 0) {
+                    file = fileInput.files[0];
+                } else {
+                    return; // No file selected
+                }
+            }
+            const f = file;
+            renderToCanvas(f).then(rC => { const mW = previewWrapper.clientWidth || 900; const mH = 400; const sc = scaleCanvasToFit(rC, mW, mH); previewWrapper.dataset.fullImage = rC.toDataURL(); displayCanvas(sc, previewWrapper); const nE = document.getElementById('image-filename'); if (nE) { nE.textContent = f.name; nE.style.display = 'block'; } submitBtn.disabled = false; clearBtn.style.display = 'inline-flex'; uploadArea.style.display = 'none'; }).catch(err => { console.error(err); showError('Could not read or render image.'); });
+        }
+        function closeCardModal() {
+            cardModalOverlay.classList.remove('visible');
+            document.body.style.overflow = '';
+            cardModalBody.innerHTML = '';
+            // Destroy all modal chart instances
+            Object.keys(activeCharts).forEach(key => {
+                if (key.startsWith('modal_')) {
+                    activeCharts[key].destroy();
+                    delete activeCharts[key];
+                }
+            });
+        }
         function escapeHTML(s) { return String(s ?? '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
 
-        // --- Normal CDF for mapping z-score -> percentile ---
-        function normalCdf(z){
-            // Abramowitz & Stegun 7.1.26 approximation
-            const b1=0.319381530, b2=-0.356563782, b3=1.781477937, b4=-1.821255978, b5=1.330274429;
-            const p=0.2316419; const t=1/(1+p*Math.abs(z));
-            const poly=((((b5*t + b4)*t + b3)*t + b2)*t + b1)*t;
-            const phi=Math.exp(-0.5*z*z)/Math.sqrt(2*Math.PI);
-            const cdf=1 - phi*poly;
-            return z>=0 ? cdf : 1-cdf;
-        }
 
         // === Modal Display Logic ===
-        function showContentInModal(title, contentHtml, chartId = null) {
+        function showContentInModal(title, contentHtml, cardId = null) {
             cardModalTitle.textContent = title;
             cardModalBody.innerHTML = contentHtml; // Inject the cloned content first
             cardModalOverlay.classList.add('visible');
             document.body.style.overflow = 'hidden';
-            currentMaximizedChartId = chartId;
+            
+            let chartIdsToRender = [];
+
+            if (cardId) {
+                if (cardId === 'tfc-card-content') {
+                    chartIdsToRender = ['tfc-malignant-chart', 'tfc-benign-chart'];
+                } else if (cardId === 'all-features-tables-card') {
+                    chartIdsToRender = []; // No chart, just table
+                } else if (cardId === 'all-features-charts-card') {
+                    chartIdsToRender = ['all-features-chart'];
+                } else if (cardId === 'prediction-card-content') {
+                     chartIdsToRender = ['prediction-gauge-chart'];
+                } else if (cardId === 'probability-card-content') {
+                    chartIdsToRender = ['probability-chart'];
+                } else if (cardId === 'abnormality-card-content') {
+                    chartIdsToRender = ['abnormality-chart'];
+                } else if (cardId === 'background-card-content') {
+                     chartIdsToRender = []; // No chart
+                }
+            }
+
 
             requestAnimationFrame(() => { // Ensure DOM is updated
-                if (chartId) {
-                    const resultData = window.__PREDICT__?.result;
-                    if (!resultData) { console.error("No result data for modal chart:", chartId); return; }
+                const resultData = window.__PREDICT__?.result;
+                if (!resultData) { console.error("No result data for modal chart"); return; }
 
-                    const canvasInModal = cardModalBody.querySelector(`#${chartId}`); // Find canvas INSIDE modal
-                    if (!canvasInModal) { console.error(`Canvas #${chartId} not found in modal body.`); return; }
+                chartIdsToRender.forEach(id => {
+                    const canvasInModal = cardModalBody.querySelector(`#${id}`);
+                    if (!canvasInModal) { console.error(`Canvas #${id} not found in modal body.`); return; }
+                    
+                    let container = canvasInModal.closest('.split-chart-wrapper, .abnormality-chart-wrapper, #probability-chart-container, .prediction-visualizer-section, .all-features-chart-wrapper');
+                    if (!container) { console.error("Could not find container for chart:", id); return; }
 
-                    let container = canvasInModal.closest('.card-content > div') || canvasInModal.parentElement;
-                    if (container && !container.style.height) { // Ensure container has height
-                        if (chartId === 'probability-chart') container.style.height = '400px';
-                        else if (chartId === 'abnormality-chart') container.style.height = '500px';
-                        else if (chartId === 'tfc-stacked') container.style.height = '400px'; // Use new ID
-                        else if (chartId === 'zscore-chart') container.style.height = '800px'; // Taller for modal
-                        else container.style.height = '400px';
-                    }
+                    // Set height for modal charts
+                    if (id === 'prediction-gauge-chart') container.style.height = '250px';
+                    else if (id === 'probability-chart') container.style.height = '200px';
+                    else if (id === 'abnormality-chart') container.style.height = '400px';
+                    else if (id.startsWith('tfc-')) container.style.height = '300px';
+                    else if (id === 'all-features-chart') container.style.height = '800px'; // Taller for modal
 
                     const ctx = canvasInModal.getContext('2d');
-                    if (!ctx) { console.error(`Could not get 2D context for modal canvas #${chartId}.`); return; }
+                    if (!ctx) { console.error(`Could not get 2D context for modal canvas #${id}.`); return; }
 
-                    // Destroy old modal chart instance before creating new one
-                    if (activeCharts['modal_' + chartId]) {
-                        activeCharts['modal_' + chartId].destroy();
-                    }
-
+                    if (activeCharts['modal_' + id]) activeCharts['modal_' + id].destroy();
+                    
                     try {
                         let newChart;
-
-
-                        if (chartId === 'probability-chart') {
-                            const probs = resultData.probabilities || {};
-                            const ben = probs['Benign'] ?? 0;
-                            const mal = probs['Malignant'] ?? 0;
-                            newChart = new Chart(ctx, {
-                                type: 'bar',
-                                data: {
-                                    labels: ['Benign', 'Malignant'],
-                                    datasets: [{
-                                        label: 'Model Probability (%)',
-                                        data: [ben * 100, mal * 100],
-                                        backgroundColor: [PASTEL_PROBS.benign, PASTEL_PROBS.malignant],
-                                        borderWidth: 0,
-                                        borderRadius: 8
-                                    }]
-                                },
-                                options: {
-                                    indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                                    scales: {
-                                        x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: 'rgba(0,0,0,0.08)' } },
-                                        y: { grid: { display: false } }
-                                    },
-                                    plugins: {
-                                        legend: { display: false },
-                                        tooltip: { callbacks: { label: ctx => `${ctx.parsed.x.toFixed(1)}%` } }
-                                    },
-                                    animation: { duration: 700 }
-                                }
-                            });
-                        }
-                        
-                        else if (chartId === 'zscore-chart') { // MODAL Z-Score Chart
-                             const zs=resultData.zscores||{};
-                             const zData=Object.keys(zs).map(k=>{const z=Number(zs[k]); const p=Number.isFinite(z)?(normalCdf(z)*100):50; return{label:PRETTY_NAMES[k]||k, z:z, p:p };});
-                             // --- CHANGE: Sort by percentile, highest first ---
-                             zData.sort((a,b)=>b.p - a.p); // Sort by percentile, highest first
-                             
-                             const labels = zData.map(d=>d.label);
-                             const data = zData.map(d=>d.p);
-                             const colors = zData.map(d => d.p > 95 || d.p < 5 ? chartColors.accentWarning : chartColors.accentGlowTint);
-                             
-                             newChart = new Chart(ctx, {
-                                 type: 'bar',
-                                 data: { labels: labels, datasets: [{ label: 'Percentile (%)', data: data, backgroundColor: colors, borderWidth: 0, borderRadius: 4 }] },
-                                 options: {
-                                     indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-                                     scales: { 
-                                         x: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: chartColors.borderColor } },
-                                         y: { ticks: { font: { size: 10 } } } // Slightly larger font for modal
-                                     },
-                                     plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.x.toFixed(1)}%` } } }
-                                 }
-                             });
-                        }
-
-                        else if (chartId === 'abnormality-chart') {
-                            const abnScores = resultData.abnormality_scores || {}; const abnValues = Object.values(abnScores);
-                            newChart = new Chart(ctx, { type: 'bar', data: { labels: Object.keys(abnScores).map(k => PRETTY_NAMES[k] || k), datasets: [{ label: 'Score', data: abnValues, backgroundColor: abnValues.map((_, i) => PASTELS[i % PASTELS.length]), borderWidth: 0, borderRadius: 5 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true }, y: { ticks: { font: {size: 14} } } }, plugins: { legend: { display: false } } } });
-                        } else if (chartId === 'tfc-stacked') { // Use new ID
-                            const tfc = Array.isArray(resultData.top_feature_contributors) ? resultData.top_feature_contributors : []; const total = tfc.reduce((s, x) => s + (x?.[1] || 0), 0) || 1; const pct = tfc.map(([label, v]) => [(PRETTY_NAMES[label] || label), (v / total) * 100]);
-                            const datasets = pct.map(([label, value], i) => ({ label, data: [value], backgroundColor: PASTELS[i % PASTELS.length], borderWidth: 0 }));
-                            newChart = new Chart(ctx, { type: 'bar', data: { labels: ['Contribution'], datasets }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { stacked: true, min: 0, max: 100, ticks: { callback: v => v + '%' } }, y: { stacked: true } }, plugins: { legend: { position: 'right', labels:{ font:{ size: 12 } } } } } });
-                        }
-                        if(newChart) {
-                            activeCharts['modal_' + chartId] = newChart; // Store modal chart instance
+                        // Find the original chart config from the main page to clone
+                        const originalChart = activeCharts[id];
+                        if (originalChart) {
+                            // Create a new chart instance using the original's config
+                            newChart = new Chart(ctx, originalChart.config);
+                            activeCharts['modal_' + id] = newChart;
+                        } else {
+                            console.warn(`Original chart for ${id} not found to clone for modal.`);
                         }
                     } catch (chartError) {
-                        console.error(`Error creating chart #${chartId} in modal:`, chartError);
+                        console.error(`Error creating chart #${id} in modal:`, chartError);
                     }
-                }
+                });
             });
         }
 
         // === Event Listeners ===
         uploadArea.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', handleFileSelect);
+        fileInput.addEventListener('change', () => handleFileSelect()); // Simplified
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => { uploadArea.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, false); });
         ['dragenter', 'dragover'].forEach(ev => { uploadArea.addEventListener(ev, () => uploadArea.classList.add('dragover'), false); });
         ['dragleave', 'drop'].forEach(ev => { uploadArea.addEventListener(ev, () => uploadArea.classList.remove('dragover'), false); });
@@ -759,6 +1012,7 @@ ob_end_clean();
                     window.__PREDICT__ = payload;
                     displayResults(payload.result);
                     saveState({ result: payload.result, imagePath: payload.image || null, filename: fileInput?.files?.[0]?.name || null });
+                    addResultToHistory(payload); // NEW: Add to history
                     resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 } else { throw new Error(payload.error || payload.noise || 'Backend error.'); }
             } catch (err) { console.error('Fetch Error:', err); showError(err?.message?.replace(/\n/g, '<br>') || 'Analysis error.'); }
@@ -771,6 +1025,239 @@ ob_end_clean();
         imageModalOverlay.addEventListener('click', e => { if (e.target === imageModalOverlay) imageModalOverlay.classList.remove('visible'); });
         closeCardModalBtn.addEventListener('click', closeCardModal);
         cardModalOverlay.addEventListener('click', e => { if (e.target === cardModalOverlay) closeCardModal(); });
+
+        // --- History Event Listeners (NEW) ---
+        clearHistoryBtn.addEventListener('click', () => {
+            saveHistory([]); // Clear storage
+            renderHistory(); // Re-render empty state
+        });
+        
+        historyList.addEventListener('click', (e) => {
+            const itemEl = e.target.closest('.history-item[data-history-id]');
+            if (!itemEl) return;
+            
+            const id = itemEl.dataset.historyId;
+            const history = loadHistory();
+            const item = history.find(h => h.id === id);
+            
+            if (item) {
+                console.log("Loading from history:", item);
+                // 1. Set global predict data
+                window.__PREDICT__ = { ok: true, result: item.result, image: item.imagePath };
+                // 2. Display the results
+                displayResults(item.result);
+                // 3. Display the image
+                if (item.imagePath) {
+                    const img = new Image();
+                    img.onload = () => {
+                        const rC = document.createElement('canvas'); rC.width = img.width; rC.height = img.height; rC.getContext('2d').drawImage(img, 0, 0);
+                        const dU = rC.toDataURL(); previewWrapper.dataset.fullImage = dU;
+                        const mW = previewWrapper.clientWidth || 900; const mH = 400; const sc = scaleCanvasToFit(rC, mW, mH);
+                        displayCanvas(sc, previewWrapper);
+                        const nE = document.getElementById('image-filename'); if (nE) { nE.textContent = item.filename || 'image'; nE.style.display = 'block'; }
+                        submitBtn.disabled = false;
+                        uploadArea.style.display = 'none';
+                        clearBtn.style.display = 'inline-flex';
+                    };
+                    img.onerror = () => { console.warn("Could not load history image:", item.imagePath); };
+                    img.src = item.imagePath;
+                }
+                // 4. Scroll to results
+                resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+
+        // --- Sticky Column Logic (NEW) ---
+        const toggleStickyBtn = document.getElementById('toggle-sticky-btn');
+        const leftColumn = document.querySelector('.left-column');
+        const stickyBtnText = document.getElementById('sticky-btn-text');
+        const pinIcon = toggleStickyBtn?.querySelector('.pin-icon');
+        const unpinIcon = toggleStickyBtn?.querySelector('.unpin-icon');
+        const STICKY_KEY = 'woa_sticky_pref';
+
+        function setStickyState(isSticky) {
+            if (!leftColumn || !toggleStickyBtn || !stickyBtnText || !pinIcon || !unpinIcon) return;
+            
+            if (isSticky) {
+                leftColumn.classList.add('is-sticky');
+                stickyBtnText.textContent = 'Unpin';
+                pinIcon.style.display = 'none';
+                unpinIcon.style.display = 'inline-block';
+                toggleStickyBtn.setAttribute('aria-pressed', 'true');
+            } else {
+                leftColumn.classList.remove('is-sticky');
+                stickyBtnText.textContent = 'Pin Panel';
+                pinIcon.style.display = 'inline-block';
+                unpinIcon.style.display = 'none';
+                toggleStickyBtn.setAttribute('aria-pressed', 'false');
+            }
+        }
+
+        if (toggleStickyBtn) {
+            toggleStickyBtn.addEventListener('click', () => {
+                const wantsSticky = !leftColumn.classList.contains('is-sticky');
+                setStickyState(wantsSticky);
+                try {
+                    localStorage.setItem(STICKY_KEY, wantsSticky);
+                } catch (e) { console.warn('Could not save sticky pref'); }
+            });
+        }
+        
+        // Load sticky pref on init
+        try {
+            const storedSticky = localStorage.getItem(STICKY_KEY);
+            if (storedSticky === 'true') {
+                setStickyState(true);
+            }
+        } catch(e) {}
+        // --- End Sticky Column Logic ---
+        
+        
+        // === NEW: Horizontal Bar Chart Renderer (from comparison.php) ===
+        // Renders a horizontal bar chart into a canvas
+        function renderHorizontalBarChart(canvasId, featuresData, barColor, valueLabel = 'Value') {
+            const cv = document.getElementById(canvasId);
+            if (!cv) { console.warn(`Canvas not found: ${canvasId}`); return; }
+            if (activeCharts[canvasId]) activeCharts[canvasId].destroy();
+            
+            if (!featuresData || featuresData.length === 0) {
+                const ctx = cv.getContext('2d');
+                ctx.clearRect(0, 0, cv.width, cv.height);
+                ctx.fillStyle = chartColors.textDark;
+                ctx.textAlign = 'center';
+                ctx.fillText(`No features found.`, cv.width / 2, cv.height / 2);
+                cv.parentElement.style.height = '100px'; // collapse if no data
+                return;
+            }
+            
+            const labels = featuresData.map(f => PRETTY_NAMES[f[0]] || f[0]);
+            const data = featuresData.map(f => f[1]);
+            const bgColor = barColor || PASTELS[0];
+            const borderColor = bgColor.replace('0.7', '1').replace('0.8', '1');
+
+            // Dynamically set height
+            const chartHeight = Math.max(150, featuresData.length * 20); // 20px per bar, min 150px
+            cv.parentElement.style.height = `${chartHeight}px`;
+
+            activeCharts[canvasId] = new Chart(cv.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: valueLabel,
+                        data: data,
+                        backgroundColor: bgColor,
+                        borderColor: borderColor,
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: chartColors.borderColor }, ticks: { color: chartColors.textDark, font: { size: 10 }, callback: v => v.toFixed(2) } },
+                        y: { grid: { display: false }, ticks: { color: chartColors.textDark, font: { size: 10 } } }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { callbacks: { label: (ctx) => ` ${valueLabel}: ${ctx.parsed.x.toFixed(6)}` } }
+                    }
+                }
+            });
+        }
+        
+        // Renders a *single* combined, color-coded chart for all Z-Scores
+        function renderAllFeaturesChart(canvasId, zDataSorted) {
+            const cv = document.getElementById(canvasId);
+            if (!cv) { console.warn(`Canvas not found: ${canvasId}`); return; }
+            if (activeCharts[canvasId]) activeCharts[canvasId].destroy();
+
+            if (!zDataSorted || zDataSorted.length === 0) {
+                 const ctx = cv.getContext('2d');
+                ctx.clearRect(0, 0, cv.width, cv.height);
+                ctx.fillStyle = chartColors.textDark;
+                ctx.textAlign = 'center';
+                ctx.fillText(`No features found.`, cv.width / 2, cv.height / 2);
+                cv.parentElement.style.height = '100px'; // collapse if no data
+                return;
+            }
+
+            const labels = zDataSorted.map(d => d.label);
+            const data = zDataSorted.map(d => d.z);
+            const colors = zDataSorted.map(d => d.z >= 0 ? chartColors.pastelBenign : chartColors.pastelMalignant);
+
+            const numFeatures = zDataSorted.length;
+            const chartHeight = Math.max(400, numFeatures * 18);
+            
+            const chartWrapper = cv.parentElement;
+            if (chartWrapper) chartWrapper.style.height = `${chartHeight}px`;
+            
+            // Sync table height if it exists
+            const tableScroll = document.getElementById('all-features-table-scroll');
+            if (tableScroll) tableScroll.style.maxHeight = `${chartHeight}px`;
+
+            activeCharts[canvasId] = new Chart(cv.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Z-Score',
+                        data: data,
+                        backgroundColor: colors,
+                        borderWidth: 0,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            position: 'top',
+                            ticks: { callback: v => v.toFixed(1) },
+                            grid: { color: chartColors.borderColor }
+                        },
+                        y: {
+                            ticks: { font: { size: 9 } }, 
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: ctx => `Z-Score: ${ctx.parsed.x.toFixed(3)}`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        // === NEW: Color-coded Table Renderer ===
+        function renderColorCodedTable(tbodyId, featuresData, valueType = 'Value') {
+            const tableBody = document.getElementById(tbodyId);
+            if (!tableBody) { console.warn(`Table body not found: ${tbodyId}`); return; }
+
+            const rows = featuresData.map(([name, value]) => {
+                const prettyName = PRETTY_NAMES[name] || name;
+                const val = Number(value);
+                const colorClass = val < 0 ? 'row-malignant' : 'row-benign';
+                const formattedValue = val.toFixed(valueType === 'Z-Score' ? 4 : 6);
+                
+                return `<tr class="${colorClass}">
+                            <td>${escapeHTML(prettyName)} <span class="subtle-name">(${escapeHTML(name)})</span></td>
+                            <td class="mono"><strong>${formattedValue}</strong></td>
+                        </tr>`;
+            }).join('') || `<tr><td colspan="2">No features found.</td></tr>`;
+            
+            tableBody.innerHTML = rows;
+        }
+
 
         // === UPDATED displayResults Function ===
         function displayResults(resultData) {
@@ -791,80 +1278,43 @@ ob_end_clean();
             const benProb = probs['Benign'] || 0;
             const malProb = probs['Malignant'] || 0;
             const confVal = Math.max(benProb, malProb);
-            const probWinner = (benProb >= malProb) ? 'Benign' : 'Malignant';
 
             // --- Prediction Gauge Visualizer ---
             const gaugeCanvas = document.getElementById('prediction-gauge-chart');
             const ringLabelMain = document.querySelector('.final-vis .ring-main');
             if (gaugeCanvas && ringLabelMain) {
                 const ctx = gaugeCanvas.getContext('2d');
-                if (activeCharts['prediction-gauge']) activeCharts['prediction-gauge'].destroy();
+                if (activeCharts['prediction-gauge-chart']) activeCharts['prediction-gauge-chart'].destroy();
 
                 const gaugeValue = confVal * 100;
                 const remainingValue = 100 - gaugeValue;
 
-                activeCharts['prediction-gauge'] = new Chart(ctx, {
+                activeCharts['prediction-gauge-chart'] = new Chart(ctx, { // Use new ID
                     type: 'doughnut', data: { datasets: [{ data: [gaugeValue, remainingValue], backgroundColor: [ predBgColor, chartColors.bgDark ], borderWidth: 0, borderRadius: 5 }] },
                     options: { responsive: true, maintainAspectRatio: true, cutout: '75%', plugins: { legend: { display: false }, tooltip: { enabled: false } }, animation: { duration: 800, easing: 'easeOutQuart' }, elements: { arc: { roundedCorners: true, } } }
                 });
                 ringLabelMain.textContent = `${gaugeValue.toFixed(1)}%`; ringLabelMain.style.color = predColor;
             }
-
-            // --- Distances, Tau, Rule ---
+            
+            // --- Distance Metrics ---
             const dB = Number(resultData.distance_to_benign);
             const dM = Number(resultData.distance_to_malignant);
+            const elDB = document.querySelector('[data-field="distance_to_benign"]');
+            const elDM = document.querySelector('[data-field="distance_to_malignant"]');
+            if (elDB) elDB.textContent = Number.isFinite(dB) ? dB.toFixed(4) : 'N/A';
+            if (elDM) elDM.textContent = Number.isFinite(dM) ? dM.toFixed(4) : 'N/A';
+
+            // --- Add distance data to resultData for CSV ---
             const tau = Number(resultData.tau);
-            const ruleText = resultData.ratio_decision || '—';
-
-            // Calculate Percentages for Distances/Tau
-            const totalDist = dB + dM;
-            let rawDB = '—', rawDM = '—', rawTau = '—';
-            let pctBStr = '—', pctMStr = '—', pctTauStr = '—';
-            if (Number.isFinite(dB) && Number.isFinite(dM) && totalDist > 0) { pctBStr = ((dB / totalDist) * 100).toFixed(1) + '%'; pctMStr = ((dM / totalDist) * 100).toFixed(1) + '%'; }
-            if (Number.isFinite(dB)) rawDB = dB.toFixed(4);
-            if (Number.isFinite(dM)) rawDM = dM.toFixed(4);
-            if (Number.isFinite(tau)) { rawTau = tau.toFixed(4); pctTauStr = (tau * 100).toFixed(1) + '%'; }
-
-            // Populate Distance/Tau Cells
-            const dbCell = document.querySelector('[data-field="distance_to_benign"]');
-            const dmCell = document.querySelector('[data-field="distance_to_malignant"]');
-            const tauCell = document.querySelector('[data-field="tau"]');
-            if(dbCell) { dbCell.dataset.rawVal = rawDB; dbCell.dataset.pctVal = pctBStr; dbCell.textContent = pctBStr; }
-            if(dmCell) { dmCell.dataset.rawVal = rawDM; dmCell.dataset.pctVal = pctMStr; dmCell.textContent = pctMStr; }
-            if(tauCell) { tauCell.dataset.rawVal = rawTau; tauCell.dataset.pctVal = pctTauStr; tauCell.textContent = pctTauStr; }
-            document.querySelector('[data-field="ratio_decision"]').textContent = ruleText;
-
-            // --- Decision Ratio & Margins Calculation & Population ---
-            const ratioCell = document.querySelector('[data-field="distance_ratio"]');
-            const malMarginCell = document.querySelector('[data-field="mal_margin"]');
-            const benMarginCell = document.querySelector('[data-field="ben_margin"]');
-            const verdictCell = document.querySelector('[data-field="decision_verdict"]');
-            let r = NaN, malMargin = NaN, benMargin = NaN, verdictText = '—', inequality = '?', rhsRaw = '?', lhsRaw = '?';
             if (Number.isFinite(dB) && dB > 0 && Number.isFinite(dM) && Number.isFinite(tau) && tau > 0) {
-                r = dM / dB; malMargin = tau / r; benMargin = r / tau;
-                const isMalignant = (dM <= tau * dB);
-                lhsRaw = dM.toFixed(4); rhsRaw = (tau * dB).toFixed(4); inequality = isMalignant ? '≤' : '>';
-                verdictText = `Check (Malignant if dM ≤ τ·dB): dM=${lhsRaw} ${inequality} τ·dB=${rhsRaw} → ${isMalignant ? 'Malignant' : 'Benign'}`;
+                    const r = dM / dB; 
+                    const malMargin = tau / r; 
+                    const benMargin = r / tau;
+                    if (Number.isFinite(r)) resultData.distance_ratio = r.toFixed(6);
+                    if (Number.isFinite(malMargin)) { resultData.malignant_margin_x = malMargin.toFixed(6); resultData.malignant_margin_pct = ((malMargin - 1) * 100).toFixed(3) + '%'; }
+                    if (Number.isFinite(benMargin)) { resultData.benign_margin_x = benMargin.toFixed(6); resultData.benign_margin_pct = ((benMargin - 1) * 100).toFixed(3) + '%'; }
             }
-            if (ratioCell) { const raw = Number.isFinite(r) ? r.toFixed(4) : '—'; const pct = Number.isFinite(r) ? (r * 100).toFixed(1) + '%' : '—'; ratioCell.dataset.rawVal = raw; ratioCell.dataset.pctVal = pct; ratioCell.textContent = pct; }
-            if (malMarginCell) { const raw = Number.isFinite(malMargin) ? malMargin.toFixed(4) + '×' : '—'; const pct = Number.isFinite(malMargin) ? ((malMargin - 1) * 100).toFixed(1) + '%' : '—'; malMarginCell.dataset.rawVal = raw; malMarginCell.dataset.pctVal = pct; malMarginCell.innerHTML = `<strong>${pct}</strong>`; }
-            if (benMarginCell) { const raw = Number.isFinite(benMargin) ? benMargin.toFixed(4) + '×' : '—'; const pct = Number.isFinite(benMargin) ? ((benMargin - 1) * 100).toFixed(1) + '%' : '—'; benMarginCell.dataset.rawVal = raw; benMarginCell.dataset.pctVal = pct; benMarginCell.innerHTML = `<strong>${pct}</strong>`; }
-            if (verdictCell) { verdictCell.textContent = verdictText; }
 
-            // Persist Ratio/Margins to resultData for CSV
-            if (Number.isFinite(r)) resultData.distance_ratio = r.toFixed(6);
-            if (Number.isFinite(malMargin)) { resultData.malignant_margin_x = malMargin.toFixed(6); resultData.malignant_margin_pct = ((malMargin - 1) * 100).toFixed(3) + '%'; }
-            if (Number.isFinite(benMargin)) { resultData.benign_margin_x = benMargin.toFixed(6); resultData.benign_margin_pct = ((benMargin - 1) * 100).toFixed(3) + '%'; }
-            if (verdictText && verdictText !== '—') resultData.decision_verdict = verdictText;
-
-            // --- Reset Value Toggle Button & Headers ---
-            const valueToggleBtn = document.querySelector('.btn-toggle-values');
-            if (valueToggleBtn) { valueToggleBtn.dataset.state = 'pct'; valueToggleBtn.querySelector('span').textContent = 'Show Raw Values'; }
-            document.querySelectorAll('.dist-toggle-header').forEach(header => { const ts = header.querySelector('.header-text'); if (ts) ts.innerHTML = header.dataset.pctText || ''; });
-
-            // --- Update Decision Note ---
-            const decisionNote = document.getElementById('decision-note');
-            if (decisionNote) { const pd = (probWinner !== (resultData.final_prediction || '—')); decisionNote.textContent = `Decision Check: dM=${lhsRaw} ${inequality} τ·dB=${rhsRaw}${pd ? ' • Note: Probabilities disagree; ratio rule used.' : ''}`; }
 
             // --- Probability Chart ---
             const probCanvas = document.getElementById('probability-chart');
@@ -872,7 +1322,7 @@ ob_end_clean();
                 const ctx = probCanvas.getContext('2d');
                 if (activeCharts['probability-chart']) activeCharts['probability-chart'].destroy();
                 activeCharts['probability-chart'] = new Chart(ctx, {
-                    type: 'bar', data: { labels: ['Benign', 'Malignant'], datasets: [{ label: 'Model Probability (%)', data: [benProb * 100, malProb * 100], backgroundColor: [PASTEL_PROBS.benign, PASTEL_PROBS.malignant], borderWidth: 0, borderRadius: 6 }] },
+                    type: 'bar', data: { labels: ['Benign', 'Malignant'], datasets: [{ label: 'Model Probability (%)', data: [benProb * 100, malProb * 100], backgroundColor: [chartColors.probBenign, chartColors.probMalignant], borderWidth: 0, borderRadius: 6 }] },
                     options: { indexAxis: 'y', responsive: true, maintainAspectRatio: true, scales: { x: { beginAtZero: true, max: 100, ticks: { callback: v => v + '%' }, grid: { color: chartColors.borderColor } }, y: { grid: { display: false } } }, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.x.toFixed(1)}%` } } }, animation: { duration: 700 } }
                 });
                 const wrap = document.querySelector('#probability-card-content .card-content'); let noteEl = wrap.querySelector('.explain-note');
@@ -890,12 +1340,11 @@ ob_end_clean();
 
             if (badgeEl) {
                 badgeEl.textContent = code.slice(0,1) || '?'; // Show first letter or ?
-                // Apply color classes based on code
                 badgeEl.className = 'birads-badge'; // Reset classes
-                if (code.startsWith('A')) badgeEl.classList.add('birads-a');
-                else if (code.startsWith('B')) badgeEl.classList.add('birads-b');
-                else if (code.startsWith('C')) badgeEl.classList.add('birads-c');
-                else if (code.startsWith('D')) badgeEl.classList.add('birads-d');
+                if (code.startsWith('A') || code.startsWith('T1')) badgeEl.classList.add('birads-t1');
+                else if (code.startsWith('B') || code.startsWith('T2')) badgeEl.classList.add('birads-t2');
+                else if (code.startsWith('C') || code.startsWith('T3')) badgeEl.classList.add('birads-t3');
+                else if (code.startsWith('D') || code.startsWith('T4')) badgeEl.classList.add('birads-t4');
             }
             if (codeEl) codeEl.textContent = code;
             if (textEl) textEl.textContent = bg.text ?? '—';
@@ -903,10 +1352,6 @@ ob_end_clean();
 
 
             // --- Explanations Card (Rendered by JS function) ---
-            const cExp = (Array.isArray(resultData.explanation?.class) && resultData.explanation.class.length > 0) ? resultData.explanation.class.map(e => `${escapeHTML(e)}`).join('<br>') : '—';
-            const aSumm = resultData.explanation?.abnormality_summary || '—';
-
-            // === Explanations Renderer ===
             (function renderExplanations() {
                 const root = document.getElementById('explain-root');
                 if (!root) { console.error("Could not find #explain-root element."); return; }
@@ -916,11 +1361,26 @@ ob_end_clean();
                 function metricsToChips(summary) { if (!summary) return ''; const c = []; const re = /([A-Za-z][A-Za-z_ ]+)\s*=\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/gi; let m; while ((m = re.exec(summary)) !== null) c.push(`<span class="metric-chip"><span class="k">${m[1].trim()}</span><span class="v">${Number(m[2]).toFixed(2)}</span></span>`); return c.join(''); }
                 function riskBadge(summary) { const s = (summary || '').toLowerCase(); if (s.includes('risk level: high')) return `<span class="badge badge-risk high">${iconShield} High Risk</span>`; if (s.includes('risk level: medium')) return `<span class="badge badge-risk med">${iconShield} Medium Risk</span>`; if (s.includes('risk level: low')) return `<span class="badge badge-risk low">${iconShield} Low Risk</span>`; return ''; }
                 function patternBadge(ct, sum) { const b = `${ct||''} ${sum||''}`.toLowerCase(); if (b.includes('→ malignant')||b.includes('malignant pattern')) return `<span class="badge badge-pattern malignant">${iconInfo} Malignant Pattern</span>`; if (b.includes('benign pattern')||b.includes('→ benign')) return `<span class="badge badge-pattern benign">${iconInfo} Benign Pattern</span>`; return ''; }
-                const classHTML = `<div class="explain-section"><div class="explain-title"><span class="dot"></span>Class-based</div><div class="explain-body">${decorateMath(cExp || '')}</div></div>`;
+                
+                const classExplanations = (Array.isArray(resultData.explanation?.class) ? resultData.explanation.class : [])
+                    .filter(e => !(e || '').includes("Mahalanobis ratio:"))
+                    .map(e => `${escapeHTML(e)}`);
+                
+                const cExp = classExplanations.length > 0 ? classExplanations.join('<br>') : '—';
+                const aSumm = resultData.explanation?.abnormality_summary || '—';
+
+                // Find existing elements to preserve distance metrics
+                const distanceMetricsEl = root.querySelector('.distance-metrics');
+                
+                const classHTML = (cExp && cExp !== '—') ? `<div class="explain-section"><div class="explain-body">${decorateMath(cExp || '')}</div></div>` : ''; 
                 const metricsHTML = metricsToChips(aSumm || '');
                 const badgesHTML = `<div class="badge-row">${patternBadge(cExp, aSumm)}${riskBadge(aSumm)}</div>`;
-                const summaryHTML = `<div class="explain-section"><div class="explain-title"><span class="dot"></span>Abnormality Summary</div><div class="explain-body">${metricsHTML||''}${badgesHTML}</div></div>`; // Removed aSumm text
+                const summaryHTML = `<div class="explain-section"><div class="explain-title"><span class="dot"></span>Abnormality Summary</div><div class="explain-body">${metricsHTML||''}${badgesHTML}</div></div>`;
+                
                 root.innerHTML = classHTML + summaryHTML;
+                if (distanceMetricsEl) {
+                    root.appendChild(distanceMetricsEl); // Re-append the distance metrics
+                }
             })();
 
 
@@ -933,169 +1393,63 @@ ob_end_clean();
                 activeCharts['abnormality-chart'] = new Chart(abnCtx, { type: 'bar', data: { labels: abnLabels, datasets: [{ label: 'Score', data: abnVals, backgroundColor: abnVals.map((_, i) => PASTELS[i % PASTELS.length]), borderWidth: 0, borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true }, y: { ticks: { font: { size: 11 } } } }, plugins: { legend: { display: false } } } });
             }
 
-            // --- Top Contributors Table (STEP 3.1) ---
-            (function(){ const tfc = Array.isArray(resultData.top_feature_contributors)?resultData.top_feature_contributors:[]; const t=tfc.reduce((s,x)=>s+(Number(x?.[1])||0),0)||1; const rows=tfc.map(([n,r])=>{const p=(Number(r)/t)*100; const pr=PRETTY_NAMES[n]||n; return`<tr><td>${escapeHTML(pr)}</td><td class="mono" data-raw-val="${escapeHTML(Number(r).toFixed(4))}" data-pct-val="${escapeHTML(p.toFixed(1)+'%')}"><strong>${escapeHTML(p.toFixed(1)+'%')}</strong></td></tr>`;}).join('')||'<tr><td colspan="2">No data</td></tr>'; 
-            const tb=document.querySelector('#tfc-card-content [data-field="top_feature_contributors"]'); // UPDATED SELECTOR
-            if(tb)tb.innerHTML=rows; })();
+            // --- (NEW) Feature Contributions (TFC) ---
+            const tfc = Array.isArray(resultData.top_feature_contributors) ? resultData.top_feature_contributors : [];
+            // Filter and sort for Malignant (negative, strongest first)
+            const tfcMalignant = tfc.filter(([, v]) => Number(v) < 0).sort((a, b) => Number(a[1]) - Number(b[1]));
+            // Filter and sort for Benign (positive, strongest first)
+            const tfcBenign = tfc.filter(([, v]) => Number(v) > 0).sort((a, b) => Number(b[1]) - Number(a[1]));
 
-            // --- Stacked Contributions Chart (STEP 3.2) ---
-            (function(){
-              const cv = document.getElementById('tfc-stacked'); // Use new ID
-              if(!cv) return;
-              if(activeCharts['tfc-stacked']) activeCharts['tfc-stacked'].destroy(); // Use new ID
+            // Render TFC Tables
+            renderColorCodedTable('tfc-malignant-body', tfcMalignant, 'Contribution');
+            renderColorCodedTable('tfc-benign-body', tfcBenign, 'Contribution');
 
-              const tfc = Array.isArray(resultData.top_feature_contributors) ? resultData.top_feature_contributors : [];
-              const total = tfc.reduce((s, x) => s + (Number(x?.[1]) || 0), 0) || 1;
-              const pct = tfc.map(([label, v]) => [ (PRETTY_NAMES[label] || label), (Number(v)/total)*100 ]);
-              const datasets = pct.map(([label, value], i) => ({
-                label,
-                data: [value],
-                backgroundColor: PASTELS[i % PASTELS.length],
-                borderWidth: 0
-              }));
-
-              activeCharts['tfc-stacked'] = new Chart(cv.getContext('2d'), { // Use new ID
-                type: 'bar',
-                data: { labels: ['Contribution'], datasets },
-                options: {
-                  indexAxis: 'y',
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    x: { stacked: true, min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: chartColors.borderColor } },
-                    y: { stacked: true, grid: { display: false } }
-                  },
-                  plugins: { legend: { position: 'bottom', labels: { boxWidth: 14, font: { size: 10 } } } }
-                }
-              });
-            })();
+            // Render TFC Charts (reverse() for horizontal bar chart display)
+            renderHorizontalBarChart('tfc-malignant-chart', tfcMalignant.map(f => [f[0], f[1]]).reverse(), chartColors.pastelMalignant, 'Contribution');
+            renderHorizontalBarChart('tfc-benign-chart', tfcBenign.map(f => [f[0], f[1]]).reverse(), chartColors.pastelBenign, 'Contribution');
             
-            // --- Height Sync (STEP 4) ---
-            (function() {
-                const tfcChartWrapper = document.getElementById('tfc-chart-wrapper');
-                const tfcTableScroll  = document.getElementById('tfc-table-scroll');
-                if (tfcChartWrapper && tfcTableScroll) {
-                  // This ensures the chart canvas itself has a height to give the wrapper a basis
-                  const canvas = document.getElementById('tfc-stacked');
-                  if (canvas) canvas.style.height = '260px'; 
-                  
-                  tfcChartWrapper.style.height = '260px';
-                  tfcTableScroll.style.maxHeight = '260px';
-                }
-            })();
 
+            // --- (NEW) All Detected Features (from Z-Scores) ---
+            const zs = resultData.zscores || {};
+            const zData = Object.keys(zs).map(k => {
+                const z = Number(zs[k]);
+                return {
+                    key: k,
+                    label: PRETTY_NAMES[k] || k,
+                    z: (Number.isFinite(z) ? z : 0)
+                };
+            });
             
-            // --- UPDATED: Z-Score Visualizer Chart (ALL features) ---
-            (function(){
-                const cv = document.getElementById('zscore-chart'); if(!cv) return;
-                if(activeCharts['zscore-chart']) activeCharts['zscore-chart'].destroy();
-                
-                const zs=resultData.zscores||{};
-                const zData = Object.keys(zs).map(k => {
-                    const z = Number(zs[k]);
-                    const p = Number.isFinite(z) ? (normalCdf(z) * 100) : 50; // default to 50 if not a number
-                    return {
-                        label: PRETTY_NAMES[k] || k,
-                        z: z,
-                        p: p
-                    };
-                });
-                
-                // --- CHANGE: Sort by percentile, highest first ---
-                zData.sort((a, b) => b.p - a.p); // Sort by percentile, highest first
-                
-                // --- CHANGE: Use all data, not slice ---
-                const allZData = zData; // No slice
-                
-                const labels = allZData.map(d => d.label);
-                const data = allZData.map(d => d.p);
-                const colors = allZData.map(d => d.p > 95 || d.p < 5 ? chartColors.accentWarning : chartColors.accentGlowTint);
-
-                // --- CHANGE: Dynamically set height of containers ---
-                const numFeatures = allZData.length;
-                const chartHeight = Math.max(400, numFeatures * 18); // 18px per bar, min 400px
-                
-                const chartWrapper = document.querySelector('#zscores-card-content .zscore-chart-wrapper');
-                const tableScroll = document.querySelector('#zscores-card-content .table-wrapper-scroll');
-
-                if (chartWrapper) chartWrapper.style.height = `${chartHeight}px`;
-                if (tableScroll) tableScroll.style.maxHeight = `${chartHeight}px`; // Match heights
-                
-                activeCharts['zscore-chart'] = new Chart(cv.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Percentile (%)',
-                            data: data,
-                            backgroundColor: colors,
-                            borderWidth: 0,
-                            borderRadius: 4
-                        }]
-                    },
-                    options: {
-                        indexAxis: 'y',
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                min: 0,
-                                max: 100,
-                                ticks: { callback: v => v + '%' },
-                                grid: { color: chartColors.borderColor }
-                            },
-                            y: {
-                                ticks: { 
-                                    font: { size: 9 } // Smaller font size for many labels
-                                }, 
-                                grid: { display: false }
-                            }
-                        },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: ctx => `Percentile: ${ctx.parsed.x.toFixed(1)}%`
-                                }
-                            }
-                        }
-                    }
-                });
-            })();
-
-            // --- UPDATED: Z-Scores Table (Sort by percentile) ---
-            { const zs=resultData.zscores||{}; const ztb=document.querySelector('#zscores-card-content [data-field="zscores"]'); if(ztb){ 
-                // --- CHANGE: Create array, sort by percentile (highest first) ---
-                const zData = Object.keys(zs).map(k => {
-                    const z = Number(zs[k]);
-                    const p = Number.isFinite(z) ? (normalCdf(z) * 100) : -Infinity; // Use -Infinity for sorting non-numbers to bottom
-                    return {
-                        key: k,
-                        z: z,
-                        p: p
-                    };
-                });
-                
-                // Sort by percentile, highest first
-                zData.sort((a, b) => b.p - a.p);
-                
-                const rows = zData.map(d => {
-                    const pn=PRETTY_NAMES[d.key]||d.key;
-                    const raw=Number.isFinite(d.z)?d.z.toFixed(4):'N/A'; 
-                    const pct=Number.isFinite(d.p)?d.p.toFixed(1)+'%':'N/A'; 
-                    return`<tr><td>${escapeHTML(pn)}</td><td class="mono" data-raw-val="${escapeHTML(raw)}" data-pct-val="${escapeHTML(pct)}"><strong>${escapeHTML(pct)}</strong></td></tr>`;
-                }).join('')||'<tr><td colspan="2">No Z-Score data</td></tr>'; 
-                
-                ztb.innerHTML=rows; const zh=document.querySelector('#zscores-card-content .zscore-toggle-header .header-text'); if(zh)zh.innerHTML='Percentile (%)'; 
-            }}
+            // Sort by Z-Score (Benign to Malignant) for both table and chart
+            const zDataSorted = zData.sort((a, b) => b.z - a.z);
+            
+            // --- All Detected Features Table ---
+            {
+                const ztb = document.getElementById('all-features-body'); // Use new ID
+                if (ztb) {
+                    // Use renderColorCodedTable for consistency
+                    renderColorCodedTable('all-features-body', zDataSorted.map(d => [d.key, d.z]), 'Z-Score');
+                }
+            }
+            
+            // --- All Detected Features Chart ---
+            // (Use the dedicated all-features chart renderer)
+            renderAllFeaturesChart('all-features-chart', zDataSorted);
+            
 
             // --- Re-attach Maximize Button Listeners ---
-            resultsGrid.querySelectorAll('.maximize-card-btn').forEach(b=>{const nb=b.cloneNode(true); b.parentNode.replaceChild(nb,b); nb.addEventListener('click',e=>{const c=e.target.closest('.step-card[id]');if(c?.id){const t=c.querySelector('h2')?.textContent.trim()||'Details'; const ce=c.querySelector('.card-content'); if(ce){const cl=ce.cloneNode(true);let cid=c.querySelector('canvas')?.id||null; 
-            // if(c.id==='top-features-card-content')cid=null; // OLD
-            if (c.id === 'tfc-card-content') cid = 'tfc-stacked'; // STEP 3.3
-            if(c.id==='prediction-card-content')cid='prediction-gauge-chart'; 
-            if(c.id==='zscores-card-content')cid='zscore-chart'; 
-            showContentInModal(t,cl.innerHTML,cid);}}});});
+            resultsGrid.querySelectorAll('.maximize-card-btn').forEach(b=>{const nb=b.cloneNode(true); b.parentNode.replaceChild(nb,b); nb.addEventListener('click',e=>{
+                const c=e.target.closest('.step-card[id]');
+                if(c?.id){
+                    const t=c.querySelector('h2')?.textContent.trim()||'Details'; 
+                    const ce=c.querySelector('.card-content'); 
+                    if(ce){
+                        const cl=ce.cloneNode(true);
+                        // Pass the *card's* ID to the modal function
+                        showContentInModal(t, cl.innerHTML, c.id);
+                    }
+                }
+            });});
 
             // --- Re-attach Print/CSV Listeners ---
             const printBtn = document.getElementById('print-btn'); if (printBtn) { const nPB = printBtn.cloneNode(true); printBtn.parentNode.replaceChild(nPB, printBtn); nPB.addEventListener('click', () => window.print()); }
@@ -1124,6 +1478,7 @@ ob_end_clean();
              if(rd.background_tissue){ c+=`Background,code,${e(rd.background_tissue.code)}\r\n`; c+=`Background,text,${e(rd.background_tissue.text)}\r\n`; c+=`Background,explanation,${e(rd.background_tissue.explain)}\r\n`; }
              if(rd.explanation?.class) c+=`Explanation,class,${e(Array.isArray(rd.explanation.class) ? rd.explanation.class.join('; ') : rd.explanation.class)}\r\n`;
              if(rd.explanation?.abnormality_summary) c+=`Explanation,abnormality_summary,${e(rd.explanation.abnormality_summary)}\r\n`;
+             // ADDED TFC to CSV
              if(rd.top_feature_contributors) rd.top_feature_contributors.forEach(([n,v])=>c+=`Feature Contribution,${e(PRETTY_NAMES[n] || n)},${e(v)}\r\n`);
              if(rd.zscores) Object.keys(rd.zscores).sort().forEach(k => c+=`Z-Score,${e(PRETTY_NAMES[k] || k)},${e(rd.zscores[k])}\r\n`);
 
@@ -1149,6 +1504,7 @@ ob_end_clean();
              if(rd.background_tissue){rs.push(["Background","code",String(rd.background_tissue.code??"—")]); rs.push(["Background","text",String(rd.background_tissue.text??"—")]); rs.push(["Background","explanation",String(rd.background_tissue.explain??"—")]);}
              if(rd.explanation?.class) rs.push(["Explanation","class",String(Array.isArray(rd.explanation.class) ? rd.explanation.class.join("; ") : rd.explanation.class)]);
              if(rd.explanation?.abnormality_summary)rs.push(["Explanation","abnormality_summary",String(rd.explanation.abnormality_summary)]);
+             // ADDED TFC to CSV Preview
              if(Array.isArray(rd.top_feature_contributors))rd.top_feature_contributors.forEach(([n,v])=>rs.push(["Feature Contribution", PRETTY_NAMES[n] || n ,String(v??"—")]));
              if(rd.zscores) Object.keys(rd.zscores).sort().forEach(k => rs.push(["Z-Score", PRETTY_NAMES[k] || k, String(rd.zscores[k] ?? "—")]));
 
@@ -1158,6 +1514,7 @@ ob_end_clean();
 
 
         // --- Initialization ---
+        renderHistory(); // NEW: Render history on load
         const initialPredictData = window.__PREDICT__;
         const stored = loadState();
         let initialImageSrc = null;
@@ -1196,56 +1553,8 @@ ob_end_clean();
             img.src = initialImageSrc;
         }
 
-        // === Event listener for Toggles (Value + Details) ===
-        document.body.addEventListener('click', e => {
-            // --- Value Toggler (Raw/Pct) ---
-            const valueToggleBtn = e.target.closest('.btn-toggle-values');
-            if (valueToggleBtn) {
-                const currentState = valueToggleBtn.dataset.state || 'pct';
-                const newState = currentState === 'pct' ? 'raw' : 'pct';
-                valueToggleBtn.dataset.state = newState;
-                const span = valueToggleBtn.querySelector('span'); if (span) span.textContent = (newState === 'pct') ? 'Show Raw Values' : 'Show Percentages';
-
-                const setHeader = (selector, pctTextAttr = 'pctText', rawTextAttr = 'rawText') => { const w=document.querySelector(selector); if(!w)return; const h=w.querySelector('.header-text'); if(!h)return; h.innerHTML=w.dataset[(newState==='pct')?pctTextAttr:rawTextAttr]||h.innerHTML; };
-                const swapCells = (containerSelector) => { const c=document.querySelector(containerSelector); if(!c)return; c.querySelectorAll('td[data-raw-val][data-pct-val]').forEach(td=>{const v=td.dataset[(newState==='pct')?'pctVal':'rawVal']||'—';if(td.querySelector('strong'))td.innerHTML=`<strong>${v}</strong>`;else td.textContent=v;}); };
-
-                // Apply to Prediction Card Headers + Cells
-                document.querySelectorAll('#prediction-card-content .dist-toggle-header').forEach(h=>{const hdr=h.querySelector('.header-text');if(hdr)hdr.innerHTML=h.dataset[(newState==='pct')?'pctText':'rawText']||hdr.innerHTML;});
-                ['[data-field="distance_to_benign"]','[data-field="distance_to_malignant"]','[data-field="tau"]','[data-field="distance_ratio"]','[data-field="mal_margin"]','[data-field="ben_margin"]'].forEach(sel=>{const td=document.querySelector(`#prediction-card-content ${sel}`);if(td){const v=td.dataset[(newState==='pct')?'pctVal':'rawVal']||'—';if(sel.includes('margin'))td.innerHTML=`<strong>${v}</strong>`;else td.textContent=v;}});
-
-                // Apply to Top Features Card (STEP 3.4)
-                setHeader('#tfc-card-content .contrib-toggle-header');
-                swapCells('#tfc-card-content');
-                // Apply to Z-Scores Card
-                setHeader('#zscores-card-content .zscore-toggle-header'); swapCells('#zscores-card-content');
-            }
-
-            // --- Collapsible Details Toggler ---
-            const detailsToggleBtn = e.target.closest('.btn-toggle-details');
-            if (detailsToggleBtn) {
-                const wrapper = detailsToggleBtn.closest('.toggle-wrapper'); if (!wrapper) return;
-                const content = wrapper.nextElementSibling;
-                if (content?.classList.contains('collapsible-content')) {
-                    detailsToggleBtn.classList.toggle('is-active'); content.classList.toggle('is-visible');
-                    const span = detailsToggleBtn.querySelector('span'); if (span) { span.textContent = content.classList.contains('is-visible') ? 'Hide Decision Logic' : 'Show Decision Logic'; }
-                }
-            }
-        }); // End of body click listener
-
-        // --- Reset details button/panel state on initial load ---
-        const initialDetailsBtn = document.querySelector('#prediction-card-content .btn-toggle-details');
-        const initialDetailsPanel = document.querySelector('#prediction-card-content .decision-details');
-        if (initialDetailsBtn && initialDetailsPanel) {
-            initialDetailsBtn.classList.remove('is-active');
-            initialDetailsPanel.classList.remove('is-visible');
-            const initialLabel = initialDetailsBtn.querySelector('span');
-            if (initialLabel) initialLabel.textContent = 'Show Decision Logic';
-        }
-
-
     });
     </script>
 
 </body>
 </html>
-

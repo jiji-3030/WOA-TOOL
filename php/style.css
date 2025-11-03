@@ -3094,166 +3094,7 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
     #progress-fill::after{content:'';position:absolute;top:0;left:0;bottom:0;right:0;transform:translateX(-100%);background:rgba(255,255,255,0.3);animation:indeterminate-progress 2s infinite ease-in-out}
  
 
-.comparison-card .collapsible-content {
-  opacity: 1;
-  margin-top: 0;
-  padding-top: 0;
-  border-top: none;
-}
 
-.comparison-card .collapsible-content[style*="max-height"] {
-   max-height: 1000px !important; /* <-- ADDED FIX: Override JS height */
-   margin-top: 0.5rem;
-   padding-top: 1rem;
-   border-top: 1px dashed var(--border-color);
-}
-
-    @media (min-width: 992px) {
-      #page-comparison .main-container {
-        max-width: 1600px; /* Increased from 1100px (in style.css) */
-      }
-    }
-
-/* 1. Widen page content */
-@media (min-width: 992px) {
-  #page-comparison .main-container {
-    max-width: 1600px !important; /* Increased from 1100px */
-  }
-}
-
-/* 2. Increase font sizes for readability */
-/* Overall Summary */
-.summary-metric .metric-label {
-    font-size: 1rem; /* Was 0.9rem */
-}
-.summary-metric .metric-value {
-    font-size: 1.5rem; /* Was 1.3rem */
-}
-
-/* Main Card Headers (WOA vs EWOA) */
-.comparison-card .step-header h2 {
-    font-size: 1.65rem; /* Was 1.5rem */
-}
-
-/* Main Card Metrics (Prediction, Confidence, etc.) */
-.comparison-metrics.simplified .metric-label {
-    font-size: 1rem; /* Was 0.9rem */
-}
-.comparison-metrics.simplified .metric-value {
-    font-size: 1.2rem; /* Was 1.1rem */
-}
-.comparison-metrics.simplified .metric-value.metric-features {
-    font-size: 0.95rem; /* Was 0.85rem */
-}
-
-/* Technical Details (Collapsible) */
-.comparison-metrics.nested-details .metric-label.nested {
-    font-size: 0.95rem; /* Was 0.85rem */
-}
-.comparison-metrics.nested-details .metric-value.nested {
-    font-size: 1rem; /* Was 0.9rem */
-}
-.comparison-metrics.nested-details .metric-value.metric-features.nested {
-    font-size: 0.9rem; /* Was 0.8rem */
-}
-
-/* Key Metrics Chart Header */
-#metrics-comparison-card h2 {
-    font-size: 1.65rem; /* Was 1.2rem in index.php */
-}
-
-/* TFC Card Headers */
-#woa-tfc-card h2, #ewoa-tfc-card h2 {
-    font-size: 1.65rem; /* Was 1.2rem in index.php */
-}
-
-/* TFC Table Text */
-.tfc-table-wrapper .data-table th,
-.tfc-table-wrapper .data-table td {
-    font-size: 0.95rem; /* Was 0.9rem in index.php */
-}
-
-/* 3. New Banner Styles for Ground Truth / Classification */
-.ground-truth-banner,
-.classification-banner {
-    text-align: left;
-    font-size: 1.05rem;
-    color: var(--text-header);
-    margin: 0.75rem 0;
-    padding: 0.75rem 1.25rem;
-    border-radius: var(--border-radius-small);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-}
-
-.ground-truth-banner {
-    background-color: var(--accent-glow-tint);
-    border: 1px solid var(--accent-glow);
-}
-.classification-banner {
-    background-color: rgba(0,0,0,0.03);
-    border: 1px solid var(--border-color);
-}
-
-.ground-truth-banner .banner-icon,
-.classification-banner .banner-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    font-weight: 700;
-    font-size: 0.9rem;
-    flex-shrink: 0;
-}
-
-.ground-truth-banner .banner-icon {
-    background: var(--accent-glow);
-    color: #fff;
-}
-.classification-banner .banner-icon {
-    background: rgba(0,0,0,0.06);
-    color: var(--text-dark);
-}
-
-.ground-truth-banner strong {
-    color: var(--text-header);
-    font-weight: 700;
-}
-.classification-banner strong {
-    color: var(--text-header);
-    font-weight: 700;
-}
-
-/* Variations for success/failure */
-.ground-truth-banner.benign strong,
-.classification-banner.benign strong {
-    color: var(--accent-success);
-}
-.ground-truth-banner.malignant strong,
-.classification-banner.malignant strong {
-    color: var(--accent-warning);
-}
-.ground-truth-banner.warning,
-.classification-banner.warning {
-    background: var(--accent-warning-tint);
-    border-color: var(--accent-warning);
-}
-.ground-truth-banner.warning .banner-icon {
-    background: var(--accent-warning);
-    color: #fff;
-}
-.ground-truth-banner.warning strong,
-.classification-banner.warning strong {
-    color: var(--accent-warning);
-}
-
-.ground-truth-banner .tooltip-icon,
-.classification-banner .tooltip-icon {
-    margin-left: auto; /* Push tooltip icon to the far right */
-}
 /*
  * ===============================================
  * STYLES FOR COMPARISON PAGE (comparison.php)
@@ -3292,6 +3133,7 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
     font-size: 0.95rem;
     line-height: 1.5;
     text-align: right;
+    max-width: 60%; /* Allow wrapping */
 }
 
 /* Technical Details (Collapsible) */
@@ -3305,6 +3147,7 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
     font-size: 0.9rem;
     line-height: 1.5;
     text-align: right;
+    max-width: 60%; /* Allow wrapping */
 }
 
 /* Key Metrics Chart Header */
@@ -3322,6 +3165,20 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
 #page-comparison .tfc-table-wrapper .data-table th,
 #page-comparison .tfc-table-wrapper .data-table td {
     font-size: 0.95rem;
+}
+/* "All Features" Card Headers */
+#page-comparison #all-features-card h2 {
+  font-size: 1.65rem;
+}
+#page-comparison #all-features-card .tfc-table-wrapper h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-header);
+  margin-bottom: 1rem;
+  text-align: center;
+}
+#page-comparison #all-features-card #ewoa-all-features-wrapper h3 {
+  color: var(--accent-glow);
 }
 
 /* 3. New Banner Styles for Ground Truth / Classification */
@@ -3416,7 +3273,7 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
   opacity: 1 !important;
 }
 
-/* 5. Confusion Matrix Styles (Table-based) */
+/* 5. UPDATED: Confusion Matrix Styles (Table-based) */
 #page-comparison .confusion-matrix-wrapper {
   display: flex;
   flex-direction: column;
@@ -3434,6 +3291,7 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
   max-width: 400px;
   padding-left: 50px; /* Space for Y-axis label */
   padding-top: 30px; /* Space for X-axis label */
+  margin: 0 auto; /* Center the container */
 }
 #page-comparison .matrix-table {
   width: 100%;
@@ -3499,12 +3357,12 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
 }
 #page-comparison .matrix-label-y {
   transform: rotate(-90deg);
-  left: -5px;
-  top: 55%;
-  transform-origin: left top;
+  left: 10px; /* Position inside padding */
+  top: calc(30px + (100% - 30px) / 2); /* Center in grid area */
+  transform-origin: center;
 }
 #page-comparison .matrix-label-x {
-  top: 5px;
+  top: 10px; /* Position inside padding */
   left: calc(50px + (100% - 50px) / 2);
   transform: translateX(-50%);
 }
@@ -3564,6 +3422,22 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
     font-weight: 600;
     color: var(--text-header);
 }
+/* UPDATED: TFC Contribution column style */
+#page-comparison #woa-tfc-card .data-table td.mono,
+#page-comparison #ewoa-tfc-card .data-table td.mono,
+#page-comparison #all-features-card .data-table td.mono {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    color: var(--text-dark);
+    text-align: right;
+}
+#page-comparison #woa-tfc-card .data-table th:last-child,
+#page-comparison #ewoa-tfc-card .data-table th:last-child,
+#page-comparison #all-features-card .data-table th:last-child {
+    text-align: right;
+    padding-right: 1rem;
+}
+
 
 /* 7. Main 2-Column Layout */
 #page-comparison .comparison-column {
@@ -3594,14 +3468,231 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
     justify-content: center;
     gap: 1rem;
 }
+/* This selector is now more specific */
 #page-comparison #run-comparison-btn {
-    width: auto; /* Let it size to its content */
-    flex-grow: 1; /* Allow it to grow */
-    max-width: 400px; /* But cap its width */
+    width: auto;
+    flex-grow: 1;
+    max-width: 400px;
 }
 #page-comparison #reset-btn {
-    width: auto; /* Let it size to its content */
+    width: auto;
     flex-grow: 0;
     flex-shrink: 0;
 }
 
+/* 9. NEW: Feature List Card Styles */
+#page-comparison .feature-list-card .card-content {
+  padding-top: 0.5rem;
+}
+#page-comparison .feature-list-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-header);
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+#page-comparison .feature-list-title.malignant {
+  color: var(--accent-warning);
+  border-bottom-color: var(--accent-warning-tint);
+}
+#page-comparison .feature-list-title.benign {
+  color: var(--accent-success);
+  border-bottom-color: var(--accent-success-tint);
+}
+#page-comparison .feature-list {
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  line-height: 1.6;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 0.5rem;
+  background: rgba(0,0,0,0.02);
+  border-radius: var(--border-radius-small);
+}
+
+/* 10. NEW: "All Features" Card Styles */
+#page-comparison #all-features-card h2 {
+  font-size: 1.65rem;
+}
+#page-comparison #all-features-card .tfc-table-wrapper h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-header);
+  margin-bottom: 1rem;
+  text-align: center;
+}
+#page-comparison #all-features-card #ewoa-all-features-wrapper h3 {
+  color: var(--accent-glow);
+}
+
+
+    /* <!-- ADDED: New styles for history, sticky sidebar, and color-coding --> */
+ 
+        .left-column {
+            transition: all 0.3s ease;
+            /* New for sticky */
+            align-self: flex-start; 
+            z-index: 10;
+        }
+        .left-column.is-sticky {
+            position: sticky;
+            top: 20px;
+        }
+        #pin-sidebar-btn {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            background: var(--bg-medium);
+            border: 1px solid var(--border-color);
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--text-dark);
+            transition: all 0.2s ease;
+        }
+        #pin-sidebar-btn:hover {
+            background: var(--bg-dark);
+            color: var(--accent-glow);
+        }
+        #pin-sidebar-btn svg {
+            width: 16px;
+            height: 16px;
+            transition: transform 0.3s ease;
+        }
+        #pin-sidebar-btn.is-active {
+            background: var(--accent-glow-tint);
+            color: var(--accent-glow);
+            border-color: var(--accent-glow);
+        }
+        #pin-sidebar-btn.is-active svg {
+            transform: rotate(45deg);
+        }
+        
+        /* History Card */
+        #history-card {
+            margin-top: 1.5rem;
+        }
+        #history-card .step-header {
+            padding-bottom: 0.75rem;
+        }
+        #history-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 250px;
+            overflow-y: auto;
+        }
+        #history-list li {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+        #history-list li:last-child {
+            border-bottom: none;
+        }
+        #history-list li:hover {
+            background-color: var(--bg-medium);
+        }
+        #history-list .history-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        #history-list .history-thumb {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        #history-list .history-details {
+            display: flex;
+            flex-direction: column;
+        }
+        #history-list .history-filename {
+            font-weight: 500;
+            color: var(--text-light);
+            max-width: 180px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        #history-list .history-date {
+            font-size: 0.75rem;
+            color: var(--text-dark);
+        }
+        #history-list .history-prediction {
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+        #history-list .history-prediction.malignant { color: var(--accent-warning); }
+        #history-list .history-prediction.benign { color: var(--accent-success); }
+        
+        #history-placeholder {
+            text-align: center;
+            padding: 1.5rem 1rem;
+            color: var(--text-dark);
+            font-size: 0.9rem;
+        }
+        #history-card .history-actions {
+            margin-top: 1rem;
+            text-align: right;
+        }
+
+        /* Color Coding for Features */
+        .data-table tr.benign-leaning {
+            color: var(--accent-success);
+        }
+        .data-table tr.malignant-leaning {
+            color: var(--accent-warning);
+        }
+        /* Make sure the cell content doesn't get overridden by other styles */
+        .data-table tr.benign-leaning td,
+        .data-table tr.benign-leaning th,
+        .data-table tr.malignant-leaning td,
+        .data-table tr.malignant-leaning th {
+            color: inherit;
+        }
+        .data-table tr.benign-leaning .mono,
+        .data-table tr.malignant-leaning .mono {
+             /* Keep mono text dark for readability on light BG */
+             color: var(--text-light);
+        }
+        .data-table tr.benign-leaning .mono strong,
+        .data-table tr.malignant-leaning .mono strong {
+             color: inherit; /* Make strong tag inherit the row color */
+        }
+        
+        /* BI-RADS Legend */
+        .birads-legend {
+            margin-top: 1.5rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border-color);
+        }
+        .birads-legend h4 {
+            margin-bottom: 0.75rem;
+            font-weight: 600;
+            color: var(--text-light);
+        }
+        .birads-legend ul {
+            font-size: 0.875rem;
+            color: var(--text-dark);
+            padding-left: 1.25rem;
+            margin: 0;
+        }
+        .birads-legend li {
+            margin-bottom: 0.35rem;
+        }
+        .birads-legend li strong {
+            color: var(--text-light);
+            font-weight: 500;
+        }
