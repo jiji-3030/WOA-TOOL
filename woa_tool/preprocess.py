@@ -4,7 +4,9 @@ import json
 import numpy as np
 import pandas as pd
 
-from .feature_extraction import extract_image_features
+from woa_tool.roi_segment import segment_and_crop
+from woa_tool.feature_extraction import extract_image_features
+
 
 OUT_DIR = "data/processed"
 os.makedirs(OUT_DIR, exist_ok=True)
@@ -76,7 +78,26 @@ def load_dataset(csv_path):
             print(f"⚠️ Row {idx}: missing image: {img_path}")
             continue
 
-        feats = extract_image_features(img_path)
+        # --- Pre-crop once, then extract features on the crop ---
+        crop_path, crop_meta = segment_and_crop(img_path)
+        feats = extract_image_features(crop_path)
+
+        # ✨ Add crop diagnostics as SCALARS (not lists)
+        bx0 = by0 = bx1 = by1 = 0.0
+        try:
+            if getattr(crop_meta, "bbox", None) is not None:
+                bx0, by0, bx1, by1 = [float(v) for v in crop_meta.bbox]
+        except Exception:
+            pass
+
+        feats.update({
+            "crop_x0": bx0,
+            "crop_y0": by0,
+            "crop_x1": bx1,
+            "crop_y1": by1,
+            "crop_ok": 1.0 if getattr(crop_meta, "ok", False) else 0.0,
+        })
+        # --------------------------------------------------------
 
         # Initialize canonical feature order from the first successful row
         if feature_names is None:
@@ -85,10 +106,14 @@ def load_dataset(csv_path):
         # Fill vector strictly following canonical order; warn if a key is missing
         vec = []
         for k in feature_names:
-            if k in feats:
-                vec.append(feats[k])
+            if k in feats and np.isscalar(feats[k]):
+                vec.append(float(feats[k]))
             else:
-                print(f"⚠️ Row {idx}: feature '{k}' missing in extraction; filling 0.0")
+                if k not in feats:
+                    print(f"⚠️ Row {idx}: feature '{k}' missing in extraction; filling 0.0")
+                else:
+                    # guard against any accidental non-scalar slipping in
+                    print(f"⚠️ Row {idx}: feature '{k}' is non-scalar; forcing 0.0")
                 vec.append(0.0)
 
         X.append(vec)
@@ -98,10 +123,8 @@ def load_dataset(csv_path):
     if feature_names is None or len(X) == 0:
         raise RuntimeError("No usable rows found in CSV. Check paths and labels.")
 
-    # Consistent dtypes
     X = np.asarray(X, dtype=np.float32)
     y = np.asarray(y, dtype=np.int32)
-
     return X, y, ids, feature_names
 
 
