@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Tuple
 
 from .feature_extraction import extract_image_features
 from .abnormality import infer_abnormality
+from .roi_segment import segment_and_crop  # <-- ROI integration
 
 
 # -----------------------
@@ -124,18 +125,17 @@ def _load_centers_and_cov(cfg: dict, d_sel: int) -> Tuple[np.ndarray, np.ndarray
 
 
 # -----------------------
-# Main prediction
+# Main prediction (ROI-enabled)
 # -----------------------
 def predict(model_path: str, image_path: str, tau_override: Optional[float] = None) -> Dict:
     """
     Predict class and infer abnormality for a new mammogram image using the
-    Mahalanobis ratio classifier.
+    Mahalanobis ratio classifier (+ ROI auto-segmentation with safe fallback).
 
     Decision rule:
         malignant (1) if d_M <= τ * d_B  else benign (0)
 
-    Output format matches your original (includes tau, ratio_decision, explanation)
-    PLUS the extra fields you requested from compare_predict.py.
+    Output keeps your original fields plus the compare_predict-style totals/names.
     """
     # --- Load model ---
     with open(model_path, "r", encoding="utf-8") as f:
@@ -160,8 +160,21 @@ def predict(model_path: str, image_path: str, tau_override: Optional[float] = No
     if not os.path.isfile(image_path):
         raise FileNotFoundError(f"❌ Image not found: {image_path}")
 
+    # --- ROI auto-segmentation (safe fallback to original image) ---
+    roi_used = False
+    crop_path = image_path
+    try:
+        _crop_path, _mask = segment_and_crop(image_path)
+        if isinstance(_crop_path, str) and os.path.isfile(_crop_path):
+            crop_path = _crop_path
+            roi_used = True
+    except Exception:
+        # silently fallback; we still want a prediction
+        roi_used = False
+        crop_path = image_path
+
     # --- Extract features, standardize, and select the same subset used in training ---
-    feats_raw = extract_image_features(image_path)
+    feats_raw = extract_image_features(crop_path)
     x_full = np.array([feats_raw.get(f, 0.0) for f in feature_names], dtype=float)
     z_full, z_sel = _standardize_and_select(
         x_full=x_full,
@@ -234,7 +247,7 @@ def predict(model_path: str, image_path: str, tau_override: Optional[float] = No
         "zscores": zscores_dict,
         "top_feature_contributors": top_features,
 
-        # === Added fields (from comparison.py style) ===
+        # === Added fields (compare_predict style) ===
         "total number of features detected": total_detected,
         "total number of \"towards malignant\"": total_mal,
         "total number of \"towards benign\"": total_ben,
@@ -242,6 +255,9 @@ def predict(model_path: str, image_path: str, tau_override: Optional[float] = No
         "name of benign features": ", ".join(names_ben) if names_ben else "(none)",
         "name of all detected features": ", ".join(selected_names) if selected_names else "(none)",
     }
+
+    # Optional: expose ROI usage (handy for debugging/UI). Comment out if you don't want it.
+    result["roi"] = {"used": bool(roi_used), "path": crop_path}
 
     if "Mass" in abn_label or "Calcifications" in abn_label:
         lesion_subtype = {"category": None, "details": {}}
