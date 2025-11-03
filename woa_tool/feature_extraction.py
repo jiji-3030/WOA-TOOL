@@ -2,7 +2,7 @@
 Image-only feature extraction for mammograms.
 
 Features returned (all computed from TIFF image):
-- glcm_*       : Haralick texture metrics (ASM, contrast, entropy, etc.)
+- glcm_*       : Haralick texture metrics (ASM, contrast, entropy, etc.) averaged over d=1..3 & 4 angles
 - hist_*       : intensity distribution stats
 - edge_*       : edge magnitude/orientation cues
 - sharp_*      : focus/texture sharpness
@@ -53,8 +53,10 @@ def _safe_load_grayscale(path: str, downscale_max: int = 1024) -> np.ndarray:
     if downscale_max is not None and m > downscale_max:
         scale = downscale_max / float(m)
         new_h, new_w = int(h * scale), int(w * scale)
-        img = resize(img, (new_h, new_w),
-                     order=1, anti_aliasing=True, preserve_range=True).astype(np.float32)
+        img = resize(
+            img, (new_h, new_w),
+            order=1, anti_aliasing=True, preserve_range=True
+        ).astype(np.float32)
     return img
 
 
@@ -75,20 +77,33 @@ def _quantiles(a: np.ndarray, qs=(25, 50, 75)) -> Tuple[float, ...]:
 
 def _glcm_features(img: np.ndarray) -> dict[str, float]:
     """
-    IMPORTANT: ignore_zeros=True to avoid background zeros (from ROI masking)
-    dominating co-occurrence counts.
+    Distance-averaged Haralick features (d=1,2,3) over 4 directions.
+    `ignore_zeros=True` so background/masked zeros don't dominate.
+    Keeps the SAME 13 keys your pipeline expects.
     """
     im8 = (img * 255).astype(np.uint8)
-    feats = mahotas.features.haralick(
-        im8, distance=1, ignore_zeros=True  # ← key change
-    ).mean(axis=0)
+
+    # Mahotas returns shape (4, 13) for a single distance.
+    # We loop over distances and average across both axes (directions & distances).
+    distances = (1, 2, 3)
+    feats_all = []
+
+    for d in distances:
+        H = mahotas.features.haralick(
+            im8, distance=d, ignore_zeros=True
+        )  # (4, 13)
+        feats_all.append(H)
+
+    H_stack = np.stack(feats_all, axis=0)          # (len(distances), 4, 13)
+    feats_mean = H_stack.mean(axis=(0, 1))         # average over distances & angles -> (13,)
+
     names = [
         "ASM", "contrast", "correlation", "variance",
         "IDM", "sum_avg", "sum_var", "sum_entropy",
         "entropy", "diff_var", "diff_entropy",
         "IMC1", "IMC2"
     ]
-    return {f"glcm_{n}": float(v) for n, v in zip(names, feats)}
+    return {f"glcm_{n}": float(v) for n, v in zip(names, feats_mean)}
 
 
 def _histogram_features(img: np.ndarray) -> Dict[str, float]:
@@ -259,7 +274,7 @@ def extract_image_features(image_path: str) -> Dict[str, float]:
     feats: Dict[str, float] = {}
 
     # 3) Core radiomic features
-    feats.update(_glcm_features(img))
+    feats.update(_glcm_features(img))                     # (distance-averaged)
     feats.update(_histogram_features(img))
     feats.update(_edge_gradient_features(img))
     feats.update(_sharpness_features(img))
@@ -291,7 +306,7 @@ def extract_image_features(image_path: str) -> Dict[str, float]:
     # 5) Directional GLCM variance (texture consistency across directions)
     try:
         im8 = (img * 255).astype(np.uint8)
-        glcm_all = mahotas.features.haralick(im8, distance=1, ignore_zeros=True)
+        glcm_all = mahotas.features.haralick(im8, distance=1, ignore_zeros=True)  # (4,13)
         feats["glcm_direction_var"] = float(np.var(glcm_all, axis=0).mean())
     except Exception:
         feats["glcm_direction_var"] = 0.0
