@@ -1,6 +1,37 @@
 <?php
+// ──────────────────────────────────────────────
+//  comparison.php
+//  add the resolver at the very top
+// ──────────────────────────────────────────────
+function resolve_test_image_path($requestedPathOrBasename) {
+    $root = __DIR__ . "/data/test_images";
+
+    // 1. if the request is already a valid full path
+    if (is_file($requestedPathOrBasename)) {
+        return $requestedPathOrBasename;
+    }
+
+    // 2. if the basename exists directly under /test_images
+    $base = basename($requestedPathOrBasename);
+    $legacy = "$root/$base";
+    if (is_file($legacy)) {
+        return $legacy;
+    }
+
+    // 3. if it uses the new naming scheme (__basename pattern)
+    $matches = glob($root . "/*__*__" . $base);
+    if (!empty($matches)) {
+        return $matches[0];  // return the first match
+    }
+
+    // 4. not found
+    return null;
+}
+// --- end of resolver helper ---
+
 // We still need session for the non-JS error fallback
 session_start();
+
 
 /* ──────────────────────────────────────────────────────────────────────────
  1) Load Config & Session State (Minimal)
