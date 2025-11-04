@@ -9,6 +9,8 @@ $config  = require __DIR__ . '/config.php';
 $python  = $config['python_path'] ?? null;
 $workdir = $config['workdir'] ?? null;
 
+ 
+
 // Only load/unset PHP error state. Results are handled by JS/localStorage.
 $error = $_SESSION['comparison_error'] ?? null;
 unset($_SESSION['comparison_error']);
@@ -224,7 +226,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
             }
             
             // 2. Get Model Paths
-            $ewoa_model_path = $config['models']['ewoa'] ?? ($workdir . '/models/model_ewoa.json');
+        
+            $ewoa_model_path = $config['models']['ewoa'] ?? ($workdir . '/models/model_final_ewoa.json');
             $woa_model_path  = $config['models']['woa']  ?? ($workdir . '/models/model_woa.json');
             
             if (!file_exists($ewoa_model_path)) error_log('[comparison.php] ERROR: EWOA model not found: ' . $ewoa_model_path);
