@@ -1,8 +1,10 @@
 <?php
 // === Load Configuration ===
 $config = require __DIR__ . '/config.php';
+
 // === File Upload Configuration ===
 $upload_dir = __DIR__ . '/test_uploads';
+
 // Create folder if not present
 if (!file_exists($upload_dir)) {
     mkdir($upload_dir, 0777, true);
@@ -15,25 +17,30 @@ if (!is_writable($upload_dir)) {
 }
 
 // === Utility Helpers ===
-function get_workdir()
-{
-    global $config;
-    return $config['workdir'];
+if (!function_exists('get_workdir')) {
+    function get_workdir()
+    {
+        global $config;
+        return $config['workdir'];
+    }
 }
 
+// Only declare this if config.php did NOT already define it
+if (!function_exists('build_predict_cmd')) {
+    function build_predict_cmd($imagePath)
+    {
+        global $config;
+        $python  = escapeshellcmd($config['python_path']);
+        $workdir = escapeshellarg($config['workdir']);
 
-function build_predict_cmd($imagePath)
-{
-    global $config;
-    $python = escapeshellcmd($config['python_path']);
-    $workdir = escapeshellarg($config['workdir']);
+        // Assuming model_final_ewoa.json is the correct model for the main prediction
+        $model = escapeshellarg($config['workdir'] . '/models/model_final_ewoa.json');
 
-    // Assuming model_ewoa.json is the correct model for the main prediction
-    $model = escapeshellarg($config['workdir'] . '/models/model_final_ewoa.json');
+        $image = escapeshellarg($imagePath);
 
-    $image = escapeshellarg($imagePath);
-    // Ensure the module path is correct if your script is inside woa_tool/cli.py
-    return "PYTHONPATH=$workdir $python -m woa_tool.cli predict --model $model --image $image";
+        // If your CLI module path is different, adjust "-m woa_tool.cli" here
+        return "PYTHONPATH=$workdir $python -m woa_tool.cli predict --model $model --image $image";
+    }
 }
 
 // === Pretty Names (Keep this updated!) ===
@@ -52,7 +59,7 @@ $pretty_names = [
     "glcm_diff_entropy" => "GLCM Difference Entropy", // Added
     "glcm_IMC1" => "GLCM Info Measure of Correlation 1",
     "glcm_IMC2" => "GLCM Info Measure of Correlation 2",
-    "glcm_direction_var" => "GLCM Directional Variance", // Added
+    "glcm_direction_var" => "GLCM Directional Variance",
 
     // === HISTOGRAM INTENSITY FEATURES ===
     "hist_mean" => "Histogram Mean Intensity (μ)",
@@ -64,50 +71,11 @@ $pretty_names = [
     "hist_q75" => "Histogram 75th Percentile (Q3)",
     "density_index" => "Tissue Density Index",
 
-    // === EDGE AND GRADIENT FEATURES ===
-    "edge_sobel_mean" => "Mean Edge Strength (Sobel)",
-    "edge_sobel_std" => "Edge Strength Variability (Sobel)",
-    "edge_ratio" => "Edge Ratio", // Added
-    "grad_coherence_mean" => "Gradient Coherence Mean",
-    "grad_coherence_std" => "Gradient Coherence Std",
-    "sharp_lap_var" => "Laplacian Variance (Sharpness)", // Added
-
-    // === SHAPE & ASYMMETRY FEATURES ===
-    "shape_area" => "Shape Area (pixels²)",
-    "shape_perimeter" => "Shape Perimeter (pixels)",
-    "shape_circularity" => "Shape Circularity",
-    "shape_eccentricity" => "Shape Eccentricity (Elongation)",
-    "shape_solidity" => "Shape Solidity",
-    "shape_extent" => "Shape Extent Ratio",
-    "shape_norm_area" => "Normalized Shape Area", // Added
-    "asym_absdiff_mean" => "Asymmetry Abs Diff Mean",
-    "asym_absdiff_std" => "Asymmetry Abs Diff Std",
-    "asym_mean_diff" => "Asymmetry Mean Difference",
-
-    // === MASS & BLOB CHARACTERISTICS ===
-    "blob_count" => "Detected Blob Count",
-    "blob_density" => "Blob Density", // Added
-    "blob_radius_mean" => "Average Blob Radius",
-    "blob_radius_std" => "Blob Radius Variability",
-
-    // === SPICULATION FEATURES ===
-    "spic_edge_density" => "Spiculation Edge Density",
-    "spic_edge_ring_ratio" => "Spiculation Ring Ratio",
-    "spic_orient_dispersion" => "Spiculation Orientation Dispersion", // Added
-    
-    // === CROP/ROI FEATURES ===
-    "crop_x0" => "ROI X0 Coordinate",
-    "crop_y0" => "ROI Y0 Coordinate",
-    "crop_x1" => "ROI X1 Coordinate",
-    "crop_y1" => "ROI Y1 Coordinate",
-    "crop_ok" => "ROI Detection Status",
-
     // === ABNORMALITY SCORES (Specific to your output) ===
     "texture_disorder" => "Texture Disorder Score",
     "shape_irregularity" => "Shape Irregularity Score",
     "spiculation_index" => "Spiculation Index Score",
     "calcification_index" => "Calcification Index Score",
-    // "density_index" => "Density Index Score", // Already defined above
 
     // === Additional Synthesized Features (Optional - keep if needed) ===
     "texture_variance" => "Texture Variance (Derived)",
@@ -118,10 +86,13 @@ $pretty_names = [
 
 // === Standard PHP Setup ===
 ob_start();
+
 if (!empty($_POST['ajax'])) {
+    // AJAX mode: don't spam notices to JSON
     ini_set('display_errors', 0);
     error_reporting(E_ERROR | E_PARSE);
 } else {
+    // Normal page request
     ini_set('display_errors', 1);
     error_reporting(E_ALL);
 }
@@ -130,8 +101,9 @@ $result = null;
 $error = null;
 $uploadedImageWebPath = null;
 $isDebug = isset($_GET['debug']);
-$debug_pack = null; // Initialize debug pack
+$debug_pack = null;
 
+// === Handle Upload + Prediction ===
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
 
     if ($_FILES['image']['error'] !== UPLOAD_ERR_OK) {
@@ -141,16 +113,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
     } elseif (!is_uploaded_file($_FILES['image']['tmp_name'])) {
         $error = "Possible file upload attack.";
     } else {
-        $fileName = uniqid('img_', true) . '-' . preg_replace('/[^A-Za-z0-9\.\-\_]/', '', basename($_FILES['image']['name']));
+        // Normalize filename: unique prefix + sanitized original name
+        $fileName = uniqid('img_', true) . '-' .
+            preg_replace('/[^A-Za-z0-9\.\-\_]/', '', basename($_FILES['image']['name']));
         $targetPath = $upload_dir . '/' . $fileName;
 
         if (move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
+            // This is what your JS uses to re-load the image for preview:
             $uploadedImageWebPath = 'test_uploads/' . basename($targetPath);
 
             // --- Real Prediction Logic ---
             if (empty($_POST['mock'])) {
                 $cmd = build_predict_cmd($targetPath);
-                $desc = [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w'],];
+
+                $desc = [
+                    0 => ['pipe', 'r'],
+                    1 => ['pipe', 'w'],
+                    2 => ['pipe', 'w'],
+                ];
+
                 $proc = proc_open($cmd, $desc, $pipes, get_workdir());
 
                 if (is_resource($proc)) {
@@ -164,21 +145,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
                     $decoded = json_decode($stdout, true);
 
                     if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-                        // --- Normalize abnormality_type (Seems okay based on your JSON example) ---
+
+                        // --- Normalize abnormality_type field ---
                         if (!isset($decoded['abnormality_type'])) {
                             if (isset($decoded['abnormality']['type'])) {
                                 $decoded['abnormality_type'] = $decoded['abnormality']['type'];
                             } elseif (isset($decoded['abnormality'])) {
-                                $decoded['abnormality_type'] = is_array($decoded['abnormality']) ? ($decoded['abnormality']['label'] ?? null) : $decoded['abnormality'];
+                                $decoded['abnormality_type'] = is_array($decoded['abnormality'])
+                                    ? ($decoded['abnormality']['label'] ?? null)
+                                    : $decoded['abnormality'];
                             } elseif (isset($decoded['lesion_type'])) {
                                 $decoded['abnormality_type'] = $decoded['lesion_type'];
                             }
                         }
                         // --- end normalization ---
+
                         $result = $decoded;
+
                     } else {
                         $jsonErrorMsg = json_last_error_msg();
                         $error = "Model did not return valid JSON (Error: $jsonErrorMsg).";
+
                         if (!empty($stderr) || $code !== 0 || !empty($stdout)) {
                             $error .= "<br>Exit Code: " . htmlspecialchars($code);
                             if (!empty($stderr)) {
@@ -191,64 +178,81 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
                     }
 
                     if ($isDebug) {
-                        $model_path = $config['workdir'] . '/models/model_ewoa.json';
-                        $debug_pack = [ /* ... (keep your debug pack fields) ... */];
+                        $model_path = $config['workdir'] . '/models/model_final_ewoa.json';
+                        // Fill this if you want a debug pack
+                        $debug_pack = [
+                            'model_path' => $model_path,
+                            'cmd'        => $cmd,
+                            'exit_code'  => $code,
+                            'stderr'     => $stderr,
+                            'raw_stdout' => $stdout,
+                        ];
                     }
 
                 } else {
-                    $error = "proc_open failed — shell execution issue? Check PHP configuration (e.g., disable_functions), server permissions, or if the Python path is correct.";
+                    $error = "proc_open failed — shell execution issue? "
+                        . "Check PHP configuration (e.g., disable_functions), server permissions, "
+                        . "or if the Python path is correct.";
                 }
             }
             // --- End Real Prediction ---
 
         } else {
-            $error = "Failed to move uploaded file. Check permissions for '$upload_dir'. Error code: " . ($_FILES['image']['error'] ?? 'unknown');
+            $error = "Failed to move uploaded file. Check permissions for '$upload_dir'. "
+                . "Error code: " . ($_FILES['image']['error'] ?? 'unknown');
         }
     }
 }
 
-// === AJAX Response (Real or Error) ===
+// === AJAX Response (no HTML) ===
 if (!empty($_POST['ajax'])) {
-    $noise = ob_get_clean();
     header('Content-Type: application/json; charset=utf-8');
-    echo json_encode([
-        'ok' => (bool) $result && !$error,
-        'result' => $result,
-        'image' => $uploadedImageWebPath ?: null,
-        'error' => $error,
-        'noise' => $isDebug ? ($noise ?: null) : null,
-        'debug' => $isDebug ? ($debug_pack ?? null) : null,
-    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 
+    if ($error) {
+        echo json_encode([
+            'ok'    => false,
+            'error' => $error,
+            'image' => $uploadedImageWebPath,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    } else {
+        echo json_encode([
+            'ok'     => true,
+            'result' => $result,
+            'image'  => $uploadedImageWebPath,
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
     exit;
 }
 // === END AJAX Handling ===
 
-$jsonData = $result ? json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : 'null';
-$jsonPrettyNames = json_encode($pretty_names); // Pass pretty names to JS
+// These are injected into JS:
+$jsonData        = $result ? json_encode($result, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) : 'null';
+$jsonPrettyNames = json_encode($pretty_names);
 ob_end_clean();
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>WOA & EWOA Breast Cancer Feature Detection</title>
+
     <link rel="icon"
-        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐳</text></svg>">
+          href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐳</text></svg>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=31"> <!-- Increment version -->
+    <link rel="stylesheet" href="style.css?v=31">
 
-
+    <!-- TIFF support (if user uploads .tif/.tiff) -->
     <script src="https://cdn.jsdelivr.net/npm/tiff.js@1.0.0/tiff.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <script>
-        window.__PREDICT__ = <?php echo $jsonData; ?>;
+        // Make PHP data available to your JavaScript
+        window.__PREDICT__        = <?php echo $jsonData; ?>;
         window.__UPLOADED_IMAGE__ = <?php echo json_encode($uploadedImageWebPath ?: null); ?>;
-        window.__PRETTY_NAMES__ = <?php echo $jsonPrettyNames; ?>; // Make names available to JS
+        window.__PRETTY_NAMES__   = <?php echo $jsonPrettyNames; ?>;
     </script>
 </head>
 
