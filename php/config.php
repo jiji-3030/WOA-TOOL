@@ -1,6 +1,6 @@
 <?php
-$python = "/Users/Jae/Documents/WOA-TOOL/.venv/bin/python3";
-$workdir = "/Users/Jae/Documents/WOA-TOOL";
+$python = "/opt/miniconda3/bin/python3";  // or your venv
+$workdir = "/Volumes/JANICE/WOA-TOOL";    // or correct path
 
 function build_predict_cmd($image) {
     global $python, $workdir;
@@ -20,8 +20,8 @@ $defaults = [
 // === Model paths ===
 $models = [
     "woa"  => "$workdir/models/model_woa.json",
-    "ewoa" => "$workdir/models/model_ewoa_finalfinal.json",
-    "default" => "$workdir/models/model_ewoa_finalfinal.json"
+    "ewoa" => "$workdir/modelsmodel_ewoa_radiomics.json",
+    "default" => "$workdir/modelsmodel_ewoa_radiomics.json"
 ];
 
 // Return the config as array

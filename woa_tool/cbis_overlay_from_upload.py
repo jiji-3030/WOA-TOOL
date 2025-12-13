@@ -1,307 +1,253 @@
 #!/usr/bin/env python3
 """
-cbis_overlay_from_upload.py
+cbis_overlay_from_upload.py — FINAL FIXED VERSION
 
-Given:
-  --image   : path to an uploaded CBIS-DDSM mammogram (DICOM)
-  --cbis-root : path to CBIS-DDSM-R data root (the one that has img/ and manifest-*/CBIS-DDSM)
-  --out-dir: where to save the overlay PNG
-
-This script will:
-
-  1. Infer the CBIS base_id (e.g., "Calc-Test_P_00038_LEFT_CC") from
-     the uploaded DICOM (metadata or path).
-  2. Locate the corresponding ROI mask in the CBIS-DDSM-R manifest.
-  3. Generate an overlay PNG (full mammogram + highlighted ROI).
-  4. Print a JSON object describing the result.
-
-Usage (example):
-
-  python3 cbis_overlay_from_upload.py \\
-      --image "/Volumes/JILLYBEAN/WOA-TOOL/php/test_uploads/whatever.dcm" \\
-      --cbis-root "/Volumes/JILLYBEAN/cbis-ddsm-r/data/CBIS-DDSM-R" \\
-      --out-dir "/Volumes/JILLYBEAN/WOA-TOOL/php/overlays"
-
+This script:
+  ✔ DOES NOT use the uploaded DICOM geometry.
+  ✔ Always uses the TRUE CBIS full-resolution mammogram.
+  ✔ Correctly finds MASS + CALC ROI masks from ANY manifest folder.
+  ✔ Creates overlays identical to overlay_from_radiomics.py.
 """
 
+from __future__ import annotations
 import argparse
-import json
 import os
+import sys
+import tempfile
+import subprocess
+import shlex
 import glob
-import re
-from typing import Optional, Tuple
-
 import numpy as np
 import SimpleITK as sitk
 
+# --------------------------------------------------------------------
+# CONFIG
+# --------------------------------------------------------------------
+HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_CBIS_ROOT = os.path.join("/Volumes", "JANICE", "cbis-ddsm-r", "data", "CBIS-DDSM-R")
+DEFAULT_RADIOMICS_CSV = os.path.join(DEFAULT_CBIS_ROOT, "csv", "radiomics_test.csv")
 
-# ---------------------------------------------------------
-# Helpers: CBIS layout
-# ---------------------------------------------------------
+# Try overlay renderer
+HAS_OVERLAY = False
+try:
+    from overlay_roi import make_overlay
+    HAS_OVERLAY = True
+except Exception:
+    HAS_OVERLAY = False
 
-def find_manifest_root(cbis_root: str) -> str:
+
+# --------------------------------------------------------------------
+# Locate the manifest folder that contains THIS case
+# --------------------------------------------------------------------
+def _find_manifest_root(cbis_root, base_id):
     """
-    Find the CBIS-DDSM manifest folder under cbis_root:
-
-      cbis_root/
-        img/
-        manifest-xxxxxx/CBIS-DDSM/...
-
-    Returns:
-      /.../CBIS-DDSM
+    Search ALL manifest-* folders and return the one that contains base_id_1.
+    Works for MASS + CALC + TRAIN + TEST splits.
     """
-    candidates = [
+    manifest_folders = [
         d for d in os.listdir(cbis_root)
         if d.startswith("manifest-") and os.path.isdir(os.path.join(cbis_root, d))
     ]
-    if not candidates:
-        raise FileNotFoundError(
-            f"No manifest-* directory found under {cbis_root}. "
-            "Check that CBIS-DDSM-R is correctly downloaded."
-        )
-    manifest_dir = sorted(candidates)[0]
-    return os.path.join(cbis_root, manifest_dir, "CBIS-DDSM")
 
+    if not manifest_folders:
+        raise FileNotFoundError("No manifest-* folders found under CBIS root.")
 
-def choose_cropped_and_mask_from_roi_series(roi_series_dir: str) -> Tuple[Optional[str], str]:
-    """
-    Inspect DICOMs inside ROI series dir and decide:
+    for folder in manifest_folders:
+        manifest_path = os.path.join(cbis_root, folder, "CBIS-DDSM")
+        roi_test = os.path.join(manifest_path, base_id + "_1")
+        if os.path.isdir(roi_test):
+            return manifest_path  # FOUND CORRECT MANIFEST!
 
-      - mask_path: the ROI mask (few nonzero pixels, low unique levels)
-      - cropped_path: the cropped ROI (many nonzero pixels, richer gray-levels)
-
-    Returns:
-      (cropped_path or None, mask_path)
-    """
-    dcm_files = sorted(
-        glob.glob(os.path.join(roi_series_dir, "**", "*.dcm"), recursive=True)
+    raise FileNotFoundError(
+        f"ROI folder {base_id}_1 not found in ANY manifest folder.\n"
+        f"Checked: {manifest_folders}"
     )
-    if not dcm_files:
-        raise FileNotFoundError(f"No DICOMs found in ROI series: {roi_series_dir}")
 
-    if len(dcm_files) == 1:
-        # Only mask available
-        return None, dcm_files[0]
+
+# --------------------------------------------------------------------
+# Find CBIS full-resolution image (NOT the uploaded file)
+# --------------------------------------------------------------------
+def _find_full_image(cbis_root, base_id):
+    img_root = os.path.join(cbis_root, "img", base_id)
+    dcm_files = glob.glob(os.path.join(img_root, "**", "*.dcm"), recursive=True)
+    if not dcm_files:
+        raise FileNotFoundError(f"No CBIS full image found: img/{base_id}")
+    return sorted(dcm_files)[0]
+
+
+# --------------------------------------------------------------------
+# Find ROI mask + crop (works for both MASS + CALC)
+# --------------------------------------------------------------------
+def _find_roi_files(manifest_root, base_id):
+    roi_folder = os.path.join(manifest_root, base_id + "_1")
+    if not os.path.isdir(roi_folder):
+        raise FileNotFoundError(f"ROI folder missing: {roi_folder}")
+
+    dcm_files = glob.glob(os.path.join(roi_folder, "**", "*.dcm"), recursive=True)
+    if not dcm_files:
+        raise FileNotFoundError(f"No ROI DICOM files under {roi_folder}")
 
     stats = []
     for fp in dcm_files:
-        img = sitk.ReadImage(fp)
-        arr = sitk.GetArrayFromImage(img)[0]
-        nz = int(np.count_nonzero(arr))
-        uniq = int(len(np.unique(arr)))
-        stats.append((nz, uniq, fp))
+        try:
+            arr = sitk.GetArrayFromImage(sitk.ReadImage(fp))[0]
+            nonzero = int(np.count_nonzero(arr))
+            uniq = int(len(np.unique(arr)))
+            stats.append((nonzero, uniq, fp))
+        except:
+            continue
 
-    # Mask: minimal non-zero + minimal unique levels
-    stats_sorted = sorted(stats, key=lambda t: (t[0], t[1]))
-    mask_path = stats_sorted[0][2]
+    if not stats:
+        raise RuntimeError("ROI DICOMs unreadable")
 
-    # Cropped: maximal non-zero (for your reference, not required for the overlay)
-    cropped_path = sorted(stats, key=lambda t: t[0], reverse=True)[0][2]
+    # Mask is binary → unique values <= 2
+    mask_candidates = [s for s in stats if s[1] <= 2]
+    if not mask_candidates:
+        mask_candidates = stats  # fallback
 
-    return cropped_path, mask_path
+    mask_fp = sorted(mask_candidates, key=lambda x: x[0])[0][2]
+    crop_fp = sorted(stats, key=lambda x: x[0], reverse=True)[0][2]
 
-
-def find_cropped_and_mask_for_base_id(manifest_root: str, base_id: str) -> Tuple[Optional[str], str]:
-    """
-    Under manifest_root = .../CBIS-DDSM, find the patient folder:
-
-      manifest_root/<base_id>_1/...
-
-    Then detect the ROI series and return (cropped_image, mask_image).
-    """
-    patient_root = os.path.join(manifest_root, base_id + "_1")
-    if not os.path.isdir(patient_root):
-        raise FileNotFoundError(f"Patient root does not exist: {patient_root}")
-
-    series_dirs = [
-        os.path.join(patient_root, d)
-        for d in os.listdir(patient_root)
-        if os.path.isdir(os.path.join(patient_root, d))
-    ]
-    if not series_dirs:
-        raise FileNotFoundError(f"No series directories found under {patient_root}")
-
-    roi_dirs = [d for d in series_dirs if "roi" in os.path.basename(d).lower()]
-    if roi_dirs:
-        roi_dir = roi_dirs[0]
-    else:
-        roi_dir = series_dirs[0]
-
-    return choose_cropped_and_mask_from_roi_series(roi_dir)
+    return crop_fp, mask_fp
 
 
-# ---------------------------------------------------------
-# Base ID inference from uploaded DICOM
-# ---------------------------------------------------------
-
-CBIS_BASEID_REGEX = re.compile(
-    r"(Calc-(?:Training|Test)_P_\d+_[A-Z]+_(?:CC|MLO))|"
-    r"(Mass-(?:Training|Test)_P_\d+_[A-Z]+_(?:CC|MLO))"
-)
-
-
-def infer_base_id_from_dicom(image_path: str) -> Optional[str]:
-    """
-    Try to recover CBIS base_id from DICOM metadata or path.
-
-    Strategy (best-effort):
-
-      1. Read DICOM with SimpleITK (no pixels, just header).
-      2. Scan all metadata values; look for a substring that matches the
-         known CBIS naming pattern via regex (Calc-... or Mass-...).
-      3. If nothing is found, try to guess from the file path itself.
-
-    Returns:
-      base_id (e.g., "Calc-Test_P_00038_LEFT_CC") or None.
-    """
-    try:
-        img = sitk.ReadImage(image_path)
-        keys = img.GetMetaDataKeys()
-        for k in keys:
-            v = img.GetMetaData(k)
-            m = CBIS_BASEID_REGEX.search(v)
-            if m:
-                # first non-None group
-                for g in m.groups():
-                    if g:
-                        return g.strip()
-    except Exception:
-        # Fall through to path-based heuristic
-        pass
-
-    # Path-based heuristic: sometimes the upload still has a path segment
-    # containing the base_id (e.g., user uploaded from a CBIS folder copy).
-    path_parts = os.path.normpath(image_path).split(os.sep)
-    for part in path_parts:
-        m = CBIS_BASEID_REGEX.search(part)
-        if m:
-            for g in m.groups():
-                if g:
-                    return g.strip()
-
-    return None
+# --------------------------------------------------------------------
+# Resample ROI mask to match full breast image geometry
+# --------------------------------------------------------------------
+def _resample(mask_img, ref_img):
+    rf = sitk.ResampleImageFilter()
+    rf.SetReferenceImage(ref_img)
+    rf.SetInterpolator(sitk.sitkNearestNeighbor)
+    rf.SetOutputPixelType(sitk.sitkUInt8)
+    return rf.Execute(mask_img)
 
 
-# ---------------------------------------------------------
-# Overlay generator
-# ---------------------------------------------------------
+# --------------------------------------------------------------------
+# Auto-detect base_id using match_radiomics_row
+# --------------------------------------------------------------------
+def detect_base_id(radiomics_csv, uploaded):
+    import csv
 
-def generate_overlay_for_upload(
-    image_path: str,
-    cbis_root: str,
-    out_dir: str,
-) -> Tuple[bool, str, Optional[str], Optional[str]]:
-    """
-    Main logic:
+    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".csv")
+    tmp.close()
 
-      - infer base_id from uploaded DICOM
-      - locate mask in CBIS-DDSM-R
-      - create overlay PNG on top of the *uploaded* image
-
-    Returns:
-      (ok, message, overlay_png_path or None, base_id or None)
-    """
-    if not os.path.isfile(image_path):
-        return False, f"Image not found: {image_path}", None, None
-
-    cbis_root = os.path.abspath(cbis_root)
-    if not os.path.isdir(cbis_root):
-        return False, f"CBIS root not found: {cbis_root}", None, None
-
-    base_id = infer_base_id_from_dicom(image_path)
-    if not base_id:
-        return False, "Could not infer CBIS base_id from DICOM metadata/path.", None, None
-
-    try:
-        manifest_root = find_manifest_root(cbis_root)
-        _, mask_path = find_cropped_and_mask_for_base_id(manifest_root, base_id)
-    except Exception as e:
-        return False, f"Failed to locate ROI mask: {e}", None, base_id
-
-    # Read uploaded image + mask and check shapes
-    try:
-        img_itk = sitk.ReadImage(image_path)
-        mask_itk = sitk.ReadImage(mask_path)
-
-        img_arr = sitk.GetArrayFromImage(img_itk)[0]
-        mask_arr = sitk.GetArrayFromImage(mask_itk)[0]
-
-        if img_arr.shape != mask_arr.shape:
-            # This usually means the uploaded file is a CROPPED image (ROI),
-            # but the mask is in FULL image space.
-            return False, (
-                f"Image and mask shapes differ: image={img_arr.shape}, mask={mask_arr.shape}. "
-                "This usually means the uploaded file is a cropped ROI rather than the full mammogram. "
-                "Please upload the FULL mammogram DICOM that matches the CBIS ROI mask."
-            ), None, base_id
-
-    except Exception as e:
-        return False, f"Failed to read image/mask: {e}", None, base_id
-
-    # Prepare RGB overlay array
-    img_norm = img_arr.astype(np.float32)
-    img_norm -= img_norm.min()
-    if img_norm.max() > 0:
-        img_norm /= img_norm.max()
-    img_uint8 = (img_norm * 255.0).astype(np.uint8)
-
-    # Create 3-channel RGB
-    rgb = np.stack([img_uint8] * 3, axis=-1)  # (H, W, 3)
-
-    # Simple red overlay wherever mask > 0
-    mask_bin = mask_arr > 0
-    # Blend: red = max, green/blue slightly dimmed
-    rgb[mask_bin, 0] = 255          # R
-    rgb[mask_bin, 1] = rgb[mask_bin, 1] // 3   # G
-    rgb[mask_bin, 2] = rgb[mask_bin, 2] // 3   # B
-
-    # Save as PNG via SimpleITK (convert back to ITK image)
-    rgb_itk = sitk.GetImageFromArray(rgb)
-    # Copy spacing/origin/direction from original for consistency (optional)
-    rgb_itk.SetSpacing(img_itk.GetSpacing())
-    rgb_itk.SetOrigin(img_itk.GetOrigin())
-    rgb_itk.SetDirection(img_itk.GetDirection())
-
-    os.makedirs(out_dir, exist_ok=True)
-    base_name = os.path.splitext(os.path.basename(image_path))[0]
-    out_png = os.path.join(out_dir, f"{base_name}_overlay.png")
-    sitk.WriteImage(rgb_itk, out_png)
-
-    return True, "Overlay created successfully.", out_png, base_id
-
-
-# ---------------------------------------------------------
-# CLI entry
-# ---------------------------------------------------------
-
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Generate CBIS-DDSM ROI overlay for an uploaded DICOM."
+    cmd = (
+        f"{shlex.quote(sys.executable)} -m woa_tool.match_radiomics_row "
+        f"--uploaded {shlex.quote(uploaded)} "
+        f"--radiomics {shlex.quote(radiomics_csv)} "
+        f"--out {shlex.quote(tmp.name)}"
     )
-    parser.add_argument("--image", required=True, help="Path to uploaded mammogram DICOM")
-    parser.add_argument("--cbis-root", required=True,
-                        help="CBIS-DDSM-R root (the folder containing img/ and manifest-*/CBIS-DDSM/)")
-    parser.add_argument("--out-dir", required=True,
-                        help="Directory where overlay PNG should be written")
+
+    proc = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    if proc.returncode != 0:
+        raise RuntimeError("match_radiomics_row failed → cannot detect base_id")
+
+    # Read result
+    with open(tmp.name, "r", newline="") as f:
+        reader = csv.reader(f)
+        header = next(reader, [])
+        row = next(reader, None)
+
+    os.remove(tmp.name)
+
+    if not row:
+        raise RuntimeError("match_radiomics_row produced empty output")
+
+    # Extract base_id from image_path
+    img_idx = None
+    for i, h in enumerate(header):
+        if h.lower() in ("image_file_path", "image"):
+            img_idx = i
+            break
+    if img_idx is None:
+        img_idx = len(row) - 1
+
+    image_rel = row[img_idx]
+    return image_rel.split("/")[0]
+
+
+# --------------------------------------------------------------------
+# MAIN
+# --------------------------------------------------------------------
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--uploaded", required=True)
+    parser.add_argument("--radiomics", default=DEFAULT_RADIOMICS_CSV)
+    parser.add_argument("--base-id", default=None)
+    parser.add_argument("--out", required=True)
+    parser.add_argument("--preview-only", action="store_true")
     args = parser.parse_args()
 
-    ok, msg, overlay_path, base_id = generate_overlay_for_upload(
-        image_path=args.image,
-        cbis_root=args.cbis_root,
-        out_dir=args.out_dir,
-    )
+    uploaded = args.uploaded
+    out = args.out
+    cbis_root = DEFAULT_CBIS_ROOT
 
-    print(json.dumps({
-        "ok": ok,
-        "message": msg,
-        "uploaded_image": os.path.abspath(args.image),
-        "cbis_root": os.path.abspath(args.cbis_root),
-        "base_id": base_id,
-        "overlay_path": (os.path.abspath(overlay_path) if overlay_path else None),
-    }, indent=2))
+    # -------------------------
+    # PREVIEW MODE
+    # -------------------------
+    if args.preview_only:
+        img = sitk.ReadImage(uploaded)
+        arr = sitk.GetArrayFromImage(img)[0]
+        mn, mx = arr.min(), arr.max()
+        arr_norm = ((arr - mn) / (mx - mn or 1) * 255).astype(np.uint8)
 
-    return 0 if ok else 1
+        from PIL import Image
+        Image.fromarray(arr_norm).save(out)
+        print(out)
+        return
+
+    # -------------------------
+    # DETECT base_id
+    # -------------------------
+    base_id = args.base_id or detect_base_id(args.radiomics, uploaded)
+
+    # -------------------------
+    # LOAD TRUE CBIS FULL IMAGE
+    # -------------------------
+    full_path = _find_full_image(cbis_root, base_id)
+    full_img = sitk.ReadImage(full_path)
+
+    # -------------------------
+    # FIND CORRECT MANIFEST WITH ROI
+    # -------------------------
+    manifest_root = _find_manifest_root(cbis_root, base_id)
+
+    # -------------------------
+    # FIND ROI MASK
+    # -------------------------
+    crop_fp, mask_fp = _find_roi_files(manifest_root, base_id)
+    mask_img = sitk.ReadImage(mask_fp)
+    mask_rs = _resample(mask_img, full_img)
+
+    # -------------------------
+    # GENERATE OVERLAY
+    # -------------------------
+    if HAS_OVERLAY:
+        tmp_mask = out + ".tmp_mask.dcm"
+        sitk.WriteImage(mask_rs, tmp_mask)
+        make_overlay(full_path, tmp_mask, out)
+        os.remove(tmp_mask)
+    else:
+        # fallback renderer
+        arr = sitk.GetArrayFromImage(full_img)[0].astype(float)
+        mn, mx = arr.min(), arr.max()
+        base = (arr - mn) / (mx - mn or 1)
+        mask = sitk.GetArrayFromImage(mask_rs)[0] > 0
+
+        rgb = np.stack([base, base, base], axis=-1)
+        rgb[mask, 0] = 1.0
+        rgb[mask, 1] *= 0.3
+        rgb[mask, 2] *= 0.3
+
+        from matplotlib import pyplot as plt
+        plt.imshow((rgb * 255).astype(np.uint8))
+        plt.axis("off")
+        plt.savefig(out, bbox_inches="tight", pad_inches=0)
+        plt.close()
+
+    print(out)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

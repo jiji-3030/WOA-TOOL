@@ -16,13 +16,24 @@ if (!is_writable($upload_dir)) {
     @chmod($upload_dir, 0777);
 }
 
+// Radiomics CSV path (adjust if different)
+$RADIOMICS_CSV = '/Volumes/JANICE/cbis-ddsm-r/data/CBIS-DDSM-R/csv/radiomics_test.csv';
+
+// Working directory used for PYTHONPATH / proc_open (from config)
+$WORKDIR = $config['workdir'] ?? getcwd();
+
 // === Utility Helpers ===
 if (!function_exists('get_workdir')) {
     function get_workdir()
     {
         global $config;
-        return $config['workdir'];
+        return $config['workdir'] ?? getcwd();
     }
+}
+
+// Ensure the config has python_path; fallback try system python
+if (empty($config['python_path'])) {
+    $config['python_path'] = '/usr/bin/python3';
 }
 
 // Only declare this if config.php did NOT already define it
@@ -34,54 +45,128 @@ if (!function_exists('build_predict_cmd')) {
         $workdir = escapeshellarg($config['workdir']);
 
         // Assuming model_final_ewoa.json is the correct model for the main prediction
-        $model = escapeshellarg($config['workdir'] . '/models/model_final_ewoa.json');
+        $model = escapeshellarg($config['workdir'] . '/models/model_ewoa_radiomics.json');
 
         $image = escapeshellarg($imagePath);
 
-        // If your CLI module path is different, adjust "-m woa_tool.cli" here
+        // Using the radiomics prediction path by default is handled later.
+        // Keep a simple helper for backwards compatibility (not used in radiomics workflow below).
         return "PYTHONPATH=$workdir $python -m woa_tool.cli predict --model $model --image $image";
     }
 }
 
 // === Pretty Names (Keep this updated!) ===
 $pretty_names = [
-    // === TEXTURE FEATURES (GLCM) ===
-    "glcm_ASM" => "GLCM Angular Second Moment (Homogeneity)",
-    "glcm_contrast" => "GLCM Contrast (Texture Roughness)",
-    "glcm_correlation" => "GLCM Correlation (Pixel Dependency)",
-    "glcm_variance" => "GLCM Variance (Gray-Level Spread)",
-    "glcm_IDM" => "GLCM Inverse Difference Moment (Uniformity)",
-    "glcm_sum_avg" => "GLCM Sum Average", // Added based on zscores
-    "glcm_sum_var" => "GLCM Sum Variance", // Added
-    "glcm_sum_entropy" => "GLCM Sum Entropy (Complexity)",
-    "glcm_entropy" => "GLCM Entropy (Randomness)",
-    "glcm_diff_var" => "GLCM Difference Variance", // Added
-    "glcm_diff_entropy" => "GLCM Difference Entropy", // Added
-    "glcm_IMC1" => "GLCM Info Measure of Correlation 1",
-    "glcm_IMC2" => "GLCM Info Measure of Correlation 2",
-    "glcm_direction_var" => "GLCM Directional Variance",
+    // ============================
+    // FIRST ORDER FEATURES
+    // ============================
+    "original_firstorder_10Percentile" => "10th Percentile",
+    "original_firstorder_90Percentile" => "90th Percentile",
+    "original_firstorder_Energy" => "Energy",
+    "original_firstorder_Entropy" => "Entropy",
+    "original_firstorder_InterquartileRange" => "Interquartile Range",
+    "original_firstorder_Kurtosis" => "Kurtosis",
+    "original_firstorder_Maximum" => "Maximum Intensity",
+    "original_firstorder_MeanAbsoluteDeviation" => "Mean Absolute Deviation",
+    "original_firstorder_Mean" => "Mean Intensity",
+    "original_firstorder_Median" => "Median Intensity",
+    "original_firstorder_Minimum" => "Minimum Intensity",
+    "original_firstorder_Range" => "Intensity Range",
+    "original_firstorder_RobustMeanAbsoluteDeviation" => "Robust MAD",
+    "original_firstorder_RootMeanSquared" => "Root Mean Square",
+    "original_firstorder_Skewness" => "Skewness",
+    "original_firstorder_TotalEnergy" => "Total Energy",
+    "original_firstorder_Uniformity" => "Uniformity",
+    "original_firstorder_Variance" => "Variance",
 
-    // === HISTOGRAM INTENSITY FEATURES ===
-    "hist_mean" => "Histogram Mean Intensity (μ)",
-    "hist_std" => "Histogram Standard Deviation (σ)",
-    "hist_skew" => "Histogram Skewness (Asymmetry)",
-    "hist_kurtosis" => "Histogram Kurtosis (Peak Sharpness)",
-    "hist_q25" => "Histogram 25th Percentile (Q1)",
-    "hist_q50" => "Histogram Median (Q2)",
-    "hist_q75" => "Histogram 75th Percentile (Q3)",
-    "density_index" => "Tissue Density Index",
+    // ============================
+    // GLCM FEATURES
+    // ============================
+    "original_glcm_Autocorrelation" => "GLCM Autocorrelation",
+    "original_glcm_ClusterProminence" => "GLCM Cluster Prominence",
+    "original_glcm_ClusterShade" => "GLCM Cluster Shade",
+    "original_glcm_ClusterTendency" => "GLCM Cluster Tendency",
+    "original_glcm_Correlation" => "GLCM Correlation",
+    "original_glcm_DifferenceAverage" => "GLCM Difference Average",
+    "original_glcm_DifferenceEntropy" => "GLCM Difference Entropy",
+    "original_glcm_DifferenceVariance" => "GLCM Difference Variance",
+    "original_glcm_Idm" => "GLCM Inverse Difference Moment",
+    "original_glcm_Idmn" => "GLCM IDM Normalized",
+    "original_glcm_Idn" => "GLCM IDN (Normalized)",
+    "original_glcm_Imc1" => "GLCM Informational Correlation 1",
+    "original_glcm_Imc2" => "GLCM Informational Correlation 2",
+    "original_glcm_InverseVariance" => "GLCM Inverse Variance",
+    "original_glcm_JointAverage" => "GLCM Joint Average",
+    "original_glcm_JointEnergy" => "GLCM Joint Energy",
+    "original_glcm_JointEntropy" => "GLCM Joint Entropy",
+    "original_glcm_MCC" => "GLCM Max Correlation Coefficient",
+    "original_glcm_MaximumProbability" => "GLCM Maximum Probability",
+    "original_glcm_SumAverage" => "GLCM Sum Average",
+    "original_glcm_SumEntropy" => "GLCM Sum Entropy",
+    "original_glcm_SumSquares" => "GLCM Sum of Squares",
 
-    // === ABNORMALITY SCORES (Specific to your output) ===
-    "texture_disorder" => "Texture Disorder Score",
-    "shape_irregularity" => "Shape Irregularity Score",
-    "spiculation_index" => "Spiculation Index Score",
-    "calcification_index" => "Calcification Index Score",
+    // ============================
+    // GLDM FEATURES
+    // ============================
+    "original_gldm_DependenceEntropy" => "GLDM Dependence Entropy",
+    "original_gldm_DependenceNonUniformity" => "GLDM Dependence Non-Uniformity",
+    "original_gldm_DependenceNonUniformityNormalized" => "GLDM Dependence Non-Uniformity Normalized",
+    "original_gldm_DependenceVariance" => "GLDM Dependence Variance",
+    "original_gldm_GrayLevelNonUniformity" => "GLDM Gray Level Non-Uniformity",
+    "original_gldm_GrayLevelVariance" => "GLDM Gray Level Variance",
+    "original_gldm_HighGrayLevelEmphasis" => "GLDM High Gray Level Emphasis",
+    "original_gldm_LargeDependenceEmphasis" => "GLDM Large Dependence Emphasis",
+    "original_gldm_LargeDependenceLowGrayLevelEmphasis" => "GLDM Large Dependence Low Gray Level Emphasis",
+    "original_gldm_LowGrayLevelEmphasis" => "GLDM Low Gray Level Emphasis",
+    "original_gldm_SmallDependenceEmphasis" => "GLDM Small Dependence Emphasis",
+    "original_gldm_SmallDependenceHighGrayLevelEmphasis" => "GLDM Small Dependence High Gray Level Emphasis",
+    "original_gldm_SmallDependenceLowGrayLevelEmphasis" => "GLDM Small Dependence Low Gray Level Emphasis",
 
-    // === Additional Synthesized Features (Optional - keep if needed) ===
-    "texture_variance" => "Texture Variance (Derived)",
-    "asymmetry_index" => "Global Asymmetry Index",
-    "compactness" => "Lesion Compactness",
-    "roughness" => "Surface Roughness Estimate",
+    // ============================
+    // GLRLM FEATURES
+    // ============================
+    "original_glrlm_GrayLevelNonUniformity" => "GLRLM Gray Level Non-Uniformity",
+    "original_glrlm_GrayLevelNonUniformityNormalized" => "GLRLM GLN Normalized",
+    "original_glrlm_GrayLevelVariance" => "GLRLM Gray Level Variance",
+    "original_glrlm_HighGrayLevelRunEmphasis" => "GLRLM High GR Run Emphasis",
+    "original_glrlm_LongRunEmphasis" => "GLRLM Long Run Emphasis",
+    "original_glrlm_LongRunHighGrayLevelEmphasis" => "GLRLM Long Run High GR Emphasis",
+    "original_glrlm_LongRunLowGrayLevelEmphasis" => "GLRLM Long Run Low GR Emphasis",
+    "original_glrlm_LowGrayLevelRunEmphasis" => "GLRLM Low Gray Run Emphasis",
+    "original_glrlm_RunEntropy" => "GLRLM Run Entropy",
+    "original_glrlm_RunLengthNonUniformity" => "GLRLM RL Non-Uniformity",
+    "original_glrlm_RunLengthNonUniformityNormalized" => "GLRLM RL Non-Uniformity Normalized",
+    "original_glrlm_RunPercentage" => "GLRLM Run Percentage",
+    "original_glrlm_RunVariance" => "GLRLM Run Variance",
+    "original_glrlm_ShortRunEmphasis" => "GLRLM Short Run Emphasis",
+    "original_glrlm_ShortRunHighGrayLevelEmphasis" => "GLRLM Short Run High GR Emphasis",
+    "original_glrlm_ShortRunLowGrayLevelEmphasis" => "GLRLM Short Run Low GR Emphasis",
+
+    // ============================
+    // GLSZM FEATURES
+    // ============================
+    "original_glszm_GrayLevelNonUniformity" => "GLSZM Gray Level Non-Uniformity",
+    "original_glszm_GrayLevelVariance" => "GLSZM Gray Level Variance",
+    "original_glszm_HighGrayLevelZoneEmphasis" => "GLSZM High Gray Level Zone Emphasis",
+    "original_glszm_LargeAreaEmphasis" => "GLSZM Large Area Emphasis",
+    "original_glszm_LargeAreaHighGrayLevelEmphasis" => "GLSZM Large Area High GR Emphasis",
+    "original_glszm_LargeAreaLowGrayLevelEmphasis" => "GLSZM Large Area Low GR Emphasis",
+    "original_glszm_SizeZoneNonUniformity" => "GLSZM Size Zone Non-Uniformity",
+    "original_glszm_SizeZoneNonUniformityNormalized" => "GLSZM SZN Normalized",
+    "original_glszm_SmallAreaEmphasis" => "GLSZM Small Area Emphasis",
+    "original_glszm_SmallAreaHighGrayLevelEmphasis" => "GLSZM Small Area High GR Emphasis",
+    "original_glszm_SmallAreaLowGrayLevelEmphasis" => "GLSZM Small Area Low GR Emphasis",
+    "original_glszm_ZoneEntropy" => "GLSZM Zone Entropy",
+    "original_glszm_ZonePercentage" => "GLSZM Zone Percentage",
+    "original_glszm_ZoneVariance" => "GLSZM Zone Variance",
+
+    // ============================
+    // NGTDM FEATURES
+    // ============================
+    "original_ngtdm_Busyness" => "NGTDM Busyness",
+    "original_ngtdm_Coarseness" => "NGTDM Coarseness",
+    "original_ngtdm_Complexity" => "NGTDM Complexity",
+    "original_ngtdm_Contrast" => "NGTDM Contrast"
 ];
 
 // === Standard PHP Setup ===
@@ -103,9 +188,61 @@ $uploadedImageWebPath = null;
 $isDebug = isset($_GET['debug']);
 $debug_pack = null;
 
+// Helper: create one-row CSV from master radiomics CSV for a given base_id
+if (!function_exists('make_one_row_radiomics_csv')) {
+    /**
+     * Tries to find a row in $radiomics_csv where the first path component equals $base_id.
+     * On success writes a CSV with header+single row to $out_csv and returns true.
+     * This is a simple PHP-based fallback for matching by base id.
+     */
+    function make_one_row_radiomics_csv($radiomics_csv, $base_id, $out_csv)
+    {
+        if (!is_file($radiomics_csv)) return false;
+        $fh = fopen($radiomics_csv, 'r');
+        if (!$fh) return false;
+        $header = fgetcsv($fh);
+        if ($header === false) { fclose($fh); return false; }
+
+        $matchedRow = null;
+        while (($row = fgetcsv($fh)) !== false) {
+            // Try to extract image path field (ends with .dcm or path)
+            // We assume a column named 'image_file_path' exists; fallback to scanning cols.
+            if (($idx = array_search('image_file_path', $header)) !== false) {
+                $path = $row[$idx] ?? '';
+            } else {
+                // fallback: search any column containing ".dcm"
+                $path = '';
+                foreach ($row as $c) {
+                    if (strpos($c, '.dcm') !== false) { $path = $c; break; }
+                }
+            }
+            if (!$path) continue;
+            $parts = explode('/', $path);
+            $candidate = $parts[0] ?? '';
+            if ($candidate === $base_id) {
+                $matchedRow = $row;
+                break;
+            }
+        }
+        fclose($fh);
+
+        if (!$matchedRow) return false;
+
+        // Write out CSV with header + single matched row
+        @mkdir(dirname($out_csv), 0777, true);
+        $of = fopen($out_csv, 'w');
+        if (!$of) return false;
+        fputcsv($of, $header);
+        fputcsv($of, $matchedRow);
+        fclose($of);
+        return file_exists($out_csv);
+    }
+}
+
 // === Handle Upload + Prediction ===
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
 
+    // Basic upload checks
     if ($_FILES['image']['error'] !== UPLOAD_ERR_OK) {
         $error = "File upload error code: " . $_FILES['image']['error'];
     } elseif ($_FILES['image']['size'] == 0) {
@@ -114,92 +251,389 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
         $error = "Possible file upload attack.";
     } else {
         // Normalize filename: unique prefix + sanitized original name
+        $orig_name = basename($_FILES['image']['name']);
         $fileName = uniqid('img_', true) . '-' .
-            preg_replace('/[^A-Za-z0-9\.\-\_]/', '', basename($_FILES['image']['name']));
+            preg_replace('/[^A-Za-z0-9\.\-\_]/', '', $orig_name);
         $targetPath = $upload_dir . '/' . $fileName;
 
-        if (move_uploaded_file($_FILES['image']['tmp_name'], $targetPath)) {
-            // This is what your JS uses to re-load the image for preview:
-            $uploadedImageWebPath = 'test_uploads/' . basename($targetPath);
+        // We will also save the full DICOM in a different folder (preserve original)
+        $full_dir = __DIR__ . '/full_uploads';
+        @mkdir($full_dir, 0777, true);
+        $target_full = $full_dir . '/' . $fileName; // full DICOM copy
+        // Save original to full_uploads, copy preview into test_uploads (converted client-side to preview)
+        if (move_uploaded_file($_FILES['image']['tmp_name'], $target_full)) {
 
-            // --- Real Prediction Logic ---
-            if (empty($_POST['mock'])) {
-                $cmd = build_predict_cmd($targetPath);
+    // Create browser-preview copy (just the original file)
+    copy($target_full, $targetPath);
 
-                $desc = [
-                    0 => ['pipe', 'r'],
-                    1 => ['pipe', 'w'],
-                    2 => ['pipe', 'w'],
-                ];
+$resp = [];   // <--- ADD THIS LINE
 
-                $proc = proc_open($cmd, $desc, $pipes, get_workdir());
+// Build web path for raw file (not the preview)
+$uploaded_web_path = 'test_uploads/' . basename($targetPath);
+$resp['image'] = $uploaded_web_path;
+$uploadedImageWebPath = $uploaded_web_path;   
 
-                if (is_resource($proc)) {
-                    fclose($pipes[0]);
-                    $stdout = stream_get_contents($pipes[1]);
-                    fclose($pipes[1]);
-                    $stderr = stream_get_contents($pipes[2]);
-                    fclose($pipes[2]);
-                    $code = proc_close($proc);
+// ===============================
+// DEBUG: Preview generation
+// ===============================
 
-                    $decoded = json_decode($stdout, true);
+// Verify paths
+$debug_info = [];
+$debug_info['python_path'] = $config['python_path'];
+$debug_info['workdir']     = $WORKDIR;
+$debug_info['uploaded_full_exists'] = file_exists($target_full);
+$debug_info['upload_dir_writable']  = is_writable($upload_dir);
 
-                    if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+// Build preview PNG path
+$preview_png = $upload_dir . '/preview_' . uniqid() . '.png';
+$debug_info['preview_png_path'] = $preview_png;
 
-                        // --- Normalize abnormality_type field ---
-                        if (!isset($decoded['abnormality_type'])) {
-                            if (isset($decoded['abnormality']['type'])) {
-                                $decoded['abnormality_type'] = $decoded['abnormality']['type'];
-                            } elseif (isset($decoded['abnormality'])) {
-                                $decoded['abnormality_type'] = is_array($decoded['abnormality'])
-                                    ? ($decoded['abnormality']['label'] ?? null)
-                                    : $decoded['abnormality'];
-                            } elseif (isset($decoded['lesion_type'])) {
-                                $decoded['abnormality_type'] = $decoded['lesion_type'];
-                            }
-                        }
-                        // --- end normalization ---
+// Build command
+$cmd_preview =
+    "PYTHONPATH=" . escapeshellarg($WORKDIR) . " " .
+    escapeshellcmd($config['python_path']) .
+    " -m woa_tool.cbis_overlay_from_upload " .
+    " --preview-only " .
+    " --uploaded " . escapeshellarg($target_full) .
+    " --out " . escapeshellarg($preview_png);
 
-                        $result = $decoded;
+// Execute with stderr capture
+$preview_output = [];
+$preview_return = 0;
 
-                    } else {
-                        $jsonErrorMsg = json_last_error_msg();
-                        $error = "Model did not return valid JSON (Error: $jsonErrorMsg).";
+exec($cmd_preview . " 2>&1", $preview_output, $preview_return);
 
-                        if (!empty($stderr) || $code !== 0 || !empty($stdout)) {
-                            $error .= "<br>Exit Code: " . htmlspecialchars($code);
-                            if (!empty($stderr)) {
-                                $error .= "<br>Stderr: <pre>" . htmlspecialchars($stderr) . "</pre>";
-                            }
-                            if (!empty($stdout) && json_last_error() !== JSON_ERROR_NONE) {
-                                $error .= "<br>Raw Stdout: <pre>" . htmlspecialchars($stdout) . "</pre>";
-                            }
-                        }
+$debug_info['cmd_preview']      = $cmd_preview;
+$debug_info['preview_stdout']   = implode("\n", $preview_output);
+$debug_info['preview_exitcode'] = $preview_return;
+$debug_info['png_exists_after'] = file_exists($preview_png);
+
+// Attach debug into AJAX response:
+$resp['preview_debug'] = $debug_info;
+
+// Normal behavior
+if (file_exists($preview_png)) {
+    $resp['preview'] = 'test_uploads/' . basename($preview_png);
+} else {
+    $resp['preview'] = null;
+}
+
+
+    // ============================================================
+    // DETERMINE ONE-ROW RADIOMICS CSV FOR PREDICTION
+    // ============================================================
+
+            $tmp_csv = $WORKDIR . '/tmp/radiomics_one_' . uniqid() . '.csv';
+            @mkdir(dirname($tmp_csv), 0777, true);
+
+            $has_base_from_name = false;
+            $base_id = '';
+
+            // Try to infer base_id from filename if possible (Calc- or Mass- or full base)
+            if (preg_match('/^(Calc|Mass)-[A-Za-z0-9_\-]+/i', $orig_name, $m)) {
+                // If filename includes a base like Calc-Training_P_00005_RIGHT_MLO or similar
+                $base_id = explode('.', $orig_name)[0]; // approximate
+            } else {
+                // Try to parse a CBIS-style base from the file's DICOM path heuristics:
+                // If user uploaded a file that is inside a CBIS folder, we may extract the case
+                $parts = explode('/', $target_full);
+                // Try to find a token starting with Calc- or Mass-
+                foreach ($parts as $p) {
+                    if (preg_match('/^(Calc|Mass)-/', $p)) {
+                        $base_id = $p;
+                        break;
                     }
-
-                    if ($isDebug) {
-                        $model_path = $config['workdir'] . '/models/model_final_ewoa.json';
-                        // Fill this if you want a debug pack
-                        $debug_pack = [
-                            'model_path' => $model_path,
-                            'cmd'        => $cmd,
-                            'exit_code'  => $code,
-                            'stderr'     => $stderr,
-                            'raw_stdout' => $stdout,
-                        ];
-                    }
-
-                } else {
-                    $error = "proc_open failed — shell execution issue? "
-                        . "Check PHP configuration (e.g., disable_functions), server permissions, "
-                        . "or if the Python path is correct.";
                 }
             }
-            // --- End Real Prediction ---
+
+            // Try simple matching first (PHP helper)
+            if ($base_id) {
+                $matched = make_one_row_radiomics_csv($RADIOMICS_CSV, $base_id, $tmp_csv);
+                if ($matched) {
+                    $has_base_from_name = true;
+                } else {
+                    $has_base_from_name = false;
+                }
+            }
+
+            // If no simple match → run Python matcher
+            if (!$has_base_from_name) {
+                $python_esc  = escapeshellcmd($config['python_path']);
+                $workdir_esc = escapeshellarg($config['workdir']);
+                $uploaded_esc = escapeshellarg($target_full);
+                $radiomics_esc = escapeshellarg($RADIOMICS_CSV);
+                $tmpcsv_esc = escapeshellarg($tmp_csv);
+
+                $cmd_match = "PYTHONPATH={$workdir_esc} {$python_esc} -m woa_tool.match_radiomics_row "
+                           . "--uploaded {$uploaded_esc} "
+                           . "--radiomics {$radiomics_esc} "
+                           . "--out {$tmpcsv_esc}";
+
+                $desc = [
+                    0 => ['pipe','r'],
+                    1 => ['pipe','w'],
+                    2 => ['pipe','w'],
+                ];
+
+                $proc = proc_open($cmd_match, $desc, $pipes, $WORKDIR);
+
+                if (!is_resource($proc)) {
+                    // Clean up
+                    @unlink($target_full);
+                    @unlink($targetPath);
+                    $error = "proc_open failed for matcher script. Check PHP configuration (disable_functions).";
+                    // On AJAX call we should return JSON; fall through to AJAX handler below.
+                } else {
+                    fclose($pipes[0]);
+                    $m_stdout = stream_get_contents($pipes[1]);
+                    fclose($pipes[1]);
+                    $m_stderr = stream_get_contents($pipes[2]);
+                    fclose($pipes[2]);
+                    $m_exit = proc_close($proc);
+
+                    if ($m_exit !== 0 || !file_exists($tmp_csv)) {
+                        @unlink($target_full);
+                        @unlink($targetPath);
+                        $error = "Failed to match uploaded DICOM to radiomics CSV. Stderr: " . htmlspecialchars($m_stderr);
+                    } else {
+                        // success; the tmp csv exists
+                    }
+                }
+            }
+
+            // If an error occurred during matching, $error contains a message.
+            if (empty($error)) {
+                // At this point $tmp_csv contains exactly 1 row for prediction
+                $targetCsv = $tmp_csv;
+
+    // ============================================================
+// EXTRACT base_id from the matched 1-row radiomics CSV
+// ============================================================
+
+if (file_exists($targetCsv)) {
+    $fh = fopen($targetCsv, 'r');
+    $header = fgetcsv($fh);
+    $row = fgetcsv($fh);
+    fclose($fh);
+
+    // Find the radiomics "image_file_path" column
+    $idx = array_search('image_file_path', $header);
+
+    if ($idx !== false && !empty($row[$idx])) {
+        // Example value:
+        // "Calc-Test_P_00038_LEFT_CC/1.3.6.1.4.1.XXXXXX/000000.dcm"
+        $parts = explode('/', $row[$idx]);
+        $base_id = $parts[0];      // <-- EXACT CBIS folder name
+// -----------------------------
+// CALL describe_lesion.py (robust)
+// -----------------------------
+$python_esc  = escapeshellcmd($config['python_path']);
+$workdir_esc = escapeshellarg($config['workdir']);
+$baseid_esc  = escapeshellarg($base_id);
+$tmpcsv_esc  = isset($targetCsv) ? escapeshellarg($targetCsv) : '';
+
+$cmd_desc = "PYTHONPATH={$workdir_esc} {$python_esc} -m woa_tool.describe_lesion --base-id {$baseid_esc}";
+if ($tmpcsv_esc) $cmd_desc .= " --radiomics {$tmpcsv_esc}";
+
+$des_desc = [
+    0 => ['pipe','r'],
+    1 => ['pipe','w'],
+    2 => ['pipe','w'],
+];
+
+$proc_desc = proc_open($cmd_desc, $des_desc, $pipes_desc, $WORKDIR);
+
+$desc_data = null;
+if (is_resource($proc_desc)) {
+    fclose($pipes_desc[0]);
+    $stdout_desc = stream_get_contents($pipes_desc[1]);
+    fclose($pipes_desc[1]);
+    $stderr_desc = stream_get_contents($pipes_desc[2]);
+    fclose($pipes_desc[2]);
+    $exit_desc = proc_close($proc_desc);
+
+    if ($exit_desc === 0 && !empty($stdout_desc)) {
+        $decoded = json_decode($stdout_desc, true);
+        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+            $desc_data = $decoded;
+        } else {
+            // fallback: try to salvage partial JSON by trimming
+            $trim = trim(preg_replace('/[^\x20-\x7E\s]+/','', $stdout_desc));
+            $decoded2 = json_decode($trim, true);
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded2)) {
+                $desc_data = $decoded2;
+            } else {
+                // decoding failed; keep desc_data null but preserve stderr for debug
+                if ($isDebug) {
+                    $debug_pack['describe_stdout'] = $stdout_desc;
+                    $debug_pack['describe_stderr'] = $stderr_desc;
+                    $debug_pack['describe_cmd'] = $cmd_desc;
+                    $debug_pack['describe_exit'] = $exit_desc;
+                }
+            }
+        }
+    } else {
+        // no JSON or non-zero exit: record debug info if debug mode
+        if ($isDebug) {
+            $debug_pack['describe_stdout'] = $stdout_desc;
+            $debug_pack['describe_stderr'] = $stderr_desc;
+            $debug_pack['describe_cmd'] = $cmd_desc;
+            $debug_pack['describe_exit'] = $exit_desc;
+        }
+    }
+} else {
+    if ($isDebug) {
+        $debug_pack['describe_error'] = 'proc_open failed for describe_lesion';
+        $debug_pack['describe_cmd'] = $cmd_desc;
+    }
+}
+
+// Map results into variables used later by PHP + frontend
+$meta_data = null;
+$lesion_narrative = null;
+$lesion_birads = null;
+
+if (is_array($desc_data)) {
+    // Standard keys: metadata, narrative, birads, base_id
+    if (isset($desc_data['metadata']) && is_array($desc_data['metadata'])) {
+        $meta_data = $desc_data['metadata'];
+    }
+    if (isset($desc_data['narrative']) && is_string($desc_data['narrative'])) {
+        $lesion_narrative = trim($desc_data['narrative']);
+    }
+    if (isset($desc_data['birads']) && $desc_data['birads'] !== '') {
+        $lesion_birads = (string)$desc_data['birads'];
+    }
+
+    // If nothing found, keep them null (frontend will show "No lesion metadata available.")
+}
+
+    }
+}
+
+// If STILL no base_id → overlay CANNOT proceed
+if (empty($base_id)) {
+    $error = "ERROR: base_id could not be determined from radiomics CSV.";
+}
+
+
+// ============================================================
+// Generate ROI Overlay PNG
+// ============================================================
+$overlay_png = $upload_dir . '/overlay_' . uniqid() . '.png';
+
+$cmd_overlay =
+    "PYTHONPATH=" . escapeshellarg($config['workdir']) . " " .
+    escapeshellcmd($config['python_path']) .
+    " -m woa_tool.cbis_overlay_from_upload " .
+    " --uploaded " . escapeshellarg($target_full) .
+    " --base-id " . escapeshellarg($base_id) .
+    " --out " . escapeshellarg($overlay_png);
+
+$overlay_output = shell_exec($cmd_overlay);
+
+if (file_exists($overlay_png)) {
+    $resp['overlay'] = 'test_uploads/' . basename($overlay_png);
+} else {
+    $resp['overlay'] = null;
+}
+
+
+                // ============================================================
+                // RUN REAL PREDICTION (predict-radiomics)
+                // ============================================================
+                if (empty($_POST['mock'])) {
+
+                    $cmd = "PYTHONPATH=" . escapeshellarg($config['workdir'])
+                         . " " . escapeshellcmd($config['python_path'])
+                         . " -m woa_tool.cli predict-radiomics "
+                         . "--model " . escapeshellarg($config['workdir'] . '/models/model_ewoa_radiomics.json')
+                         . " --csv " . escapeshellarg($targetCsv);
+
+                    $desc = [
+                        0 => ['pipe','r'],
+                        1 => ['pipe','w'],
+                        2 => ['pipe','w'],
+                    ];
+
+                    $proc = proc_open($cmd, $desc, $pipes, $WORKDIR);
+
+                    if (!is_resource($proc)) {
+                        $error = "proc_open failed — check PHP disable_functions and permissions.";
+                    } else {
+                        fclose($pipes[0]);
+                        $stdout = stream_get_contents($pipes[1]);
+                        fclose($pipes[1]);
+                        $stderr = stream_get_contents($pipes[2]);
+                        fclose($pipes[2]);
+                        $code = proc_close($proc);
+
+                        $decoded = json_decode($stdout, true);
+
+                        if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+
+                            // Normalize abnormality_type
+                            if (!isset($decoded['abnormality_type'])) {
+                                if (isset($decoded['abnormality']['type'])) {
+                                    $decoded['abnormality_type'] = $decoded['abnormality']['type'];
+                                } elseif (isset($decoded['abnormality'])) {
+                                    $decoded['abnormality_type'] = is_array($decoded['abnormality'])
+                                        ? ($decoded['abnormality']['label'] ?? null)
+                                        : $decoded['abnormality'];
+                                } elseif (isset($decoded['lesion_type'])) {
+                                    $decoded['abnormality_type'] = $decoded['lesion_type'];
+                                }
+                            }
+
+$result = $decoded;
+
+// Attach metadata, narrative, and BI-RADS from describe_lesion.py
+if (!empty($meta_data)) {
+    $result['lesion_metadata'] = $meta_data;
+}
+
+if (!empty($lesion_narrative)) {
+    $result['lesion_narrative'] = $lesion_narrative;
+}
+
+if (!empty($lesion_birads)) {
+    $result['lesion_birads'] = $lesion_birads;
+}
+
+
+                        } else {
+                            $jsonErrorMsg = json_last_error_msg();
+                            $error = "Model did not return valid JSON (Error: $jsonErrorMsg).";
+
+                            if (!empty($stderr) || $code !== 0 || !empty($stdout)) {
+                                $error .= "<br>Exit Code: " . htmlspecialchars($code);
+                                if (!empty($stderr)) $error .= "<br>Stderr: <pre>" . htmlspecialchars($stderr) . "</pre>";
+                                if (!empty($stdout)) $error .= "<br>Raw Stdout: <pre>" . htmlspecialchars($stdout) . "</pre>";
+                            }
+                        }
+
+                        if ($isDebug) {
+                            $model_path = $config['workdir'] . '/models/model_ewoa_radiomics.json';
+                            // Fill this if you want a debug pack
+                            $debug_pack = [
+                                'model_path' => $model_path,
+                                'cmd'        => $cmd,
+                                'exit_code'  => $code,
+                                'stderr'     => $stderr,
+                                'raw_stdout' => $stdout,
+                                'matcher_stdout' => $m_stdout ?? null,
+                                'matcher_stderr' => $m_stderr ?? null,
+                            ];
+                        }
+                    }
+                } else {
+                    // Mock mode: produce a fake result or leave $result null and let frontend fallback
+                    $result = $result ?? null;
+                }
+            } // end empty($error)
 
         } else {
-            $error = "Failed to move uploaded file. Check permissions for '$upload_dir'. "
-                . "Error code: " . ($_FILES['image']['error'] ?? 'unknown');
+            $error = "Failed to move uploaded file. Check permissions for '$upload_dir'. Error code: " . ($_FILES['image']['error'] ?? 'unknown');
         }
     }
 }
@@ -208,21 +642,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image'])) {
 if (!empty($_POST['ajax'])) {
     header('Content-Type: application/json; charset=utf-8');
 
-    if ($error) {
-        echo json_encode([
-            'ok'    => false,
-            'error' => $error,
-            'image' => $uploadedImageWebPath,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    } else {
-        echo json_encode([
-            'ok'     => true,
-            'result' => $result,
-            'image'  => $uploadedImageWebPath,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-    }
+    $response = [
+        'ok'      => !$error,
+        'error'   => $error ?? null,
+        'result'  => $result ?? null,
+        'image'   => $uploadedImageWebPath ?? null,
+        'preview' => $resp['preview'] ?? null,   // <-- ADD THIS
+        'overlay' => $resp['overlay'] ?? null,   // <-- ADD THIS
+        'debug'   => $debug_pack ?? null,
+    ];
+
+    echo json_encode($response, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     exit;
 }
+
+
 // === END AJAX Handling ===
 
 // These are injected into JS:
@@ -331,30 +765,41 @@ ob_end_clean();
                                     d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                             </svg> Upload Image</h2>
                     </div>
-                    <span class="tooltip-icon">i<span class="tooltip-content">Accepted formats: .tif, .tiff, .png, .jpg,
+                    <span class="tooltip-icon">i<span class="tooltip-content">Accepted formats: .dcm, .tif, .tiff, .png, .jpg,
                             .jpeg. Size limit depends on server config.</span></span>
                 </div>
-                <form id="image-upload-form" method="post" enctype="multipart/form-data">
-                    <div id="image-preview-wrapper" style="display: none;">
-                        <button type="button" class="maximize-btn" title="Maximize Image" aria-label="Maximize"><svg
-                                xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                                viewBox="0 0 16 16">
-                                <path
-                                    d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" />
-                            </svg></button>
-                        <canvas></canvas>
-                        <p id="image-filename" class="file-meta" style="display:none;"></p>
-                    </div>
-                    <div class="upload-area" id="upload-area">
-                        <input type="file" name="image" id="file-input" accept=".tif,.tiff,.png,.jpg,.jpeg" required>
-                        <svg class="upload-area__icon" xmlns="http://www.w3.org/2000/svg" fill="none"
-                            viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round"
-                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                        <p class="upload-area__text">Drag & Drop image file or <span>browse</span> to upload.</p>
-                    </div>
-                </form>
+<form id="image-upload-form" method="post" enctype="multipart/form-data">
+
+    <!-- MAIN PREVIEW -->
+    <div id="image-preview-wrapper" style="display: none;">
+        <button type="button" class="maximize-btn" title="Maximize Image" aria-label="Maximize">
+            <svg ...></svg>
+        </button>
+        <canvas></canvas>
+        <p id="image-filename" class="file-meta" style="display:none;"></p>
+    </div>
+
+    <!-- ✅ NEW: Overlay goes HERE, under preview -->
+    <div id="overlay-preview-wrapper" 
+         style="display:none; margin-top:1rem; text-align:center;">
+         
+        <h4 style="margin-bottom:0.5rem;">ROI Overlay</h4>
+        <img id="overlay-preview-img" 
+             src="" 
+             style="max-width:100%; border-radius:8px;">
+    </div>
+
+    <!-- Lesion textual description (metadata + narrative) -->
+
+
+    <!-- UPLOAD AREA -->
+    <div class="upload-area" id="upload-area">
+        <input type="file" id="file-input" name="image" accept="*/*">
+        <svg class="upload-area__icon" ...></svg>
+        <p class="upload-area__text">Drag & Drop image file or <span>browse</span> to upload.</p>
+    </div>
+
+</form>
             </div>
             <div class="step-card text-center">
                 <div class="step-header">
@@ -504,239 +949,57 @@ ob_end_clean();
                                     <!-- REMOVED TOGGLE WRAPPER AND DECISION-DETAILS DIV -->
                                 </div>
 
-                                <!-- Right side: Lesion Summary (MOVED FROM OTHER CARD) -->
-                                <div id="probability-summary-root" style="flex: 1 1 45%; min-width: 300px;">
-                                    <div class="feature-summary-item">
-                                        <span class="metric-label">Lesion Subtype</span>
-                                        <span class="metric-value" data-field="lesion_subtype">N/A</span>
-                                    </div>
-                                    <div class="feature-summary-item">
-                                        <span class="metric-label">Total Features Detected</span>
-                                        <span class="metric-value" data-field="total_features">N/A</span>
-                                    </div>
-                                    <div class="feature-summary-item">
-                                        <span class="metric-label">Total Towards Malignant</span>
-                                        <span class="metric-value text-malignant"
-                                            data-field="total_malignant">N/A</span>
-                                    </div>
-                                    <div class="feature-summary-item">
-                                        <span class="metric-label">Total Towards Benign</span>
-                                        <span class="metric-value text-benign" data-field="total_benign">N/A</span>
-                                    </div>
-                                </div>
+                                <div id="lesion-description-block" style="display:none; margin-top: 1rem;" class="step-card">
+  <div class="step-header">
+    <div class="step-header-left">
+      <h2>Lesion Description</h2>
+    </div>
+  </div>
+  <div class="card-content" id="lesion-description-content">
+    <!-- Filled by JS -->
+  </div>
+</div>
+
+<!--
+<div id="probability-summary-root" style="flex: 1 1 45%; min-width: 300px;">
+    
+    <div class="feature-summary-item">
+        <span class="metric-label">Lesion Type</span>
+        <span class="metric-value" data-field="lesion_type">N/A</span>
+    </div>
+
+    <div class="feature-summary-item">
+        <span class="metric-label">Lesion Shape</span>
+        <span class="metric-value" data-field="lesion_shape">N/A</span>
+    </div>
+
+    <div class="feature-summary-item">
+        <span class="metric-label">Lesion Margins</span>
+        <span class="metric-value" data-field="lesion_margins">N/A</span>
+    </div>
+
+    <div class="feature-summary-item">
+        <span class="metric-label">Assessment</span>
+        <span class="metric-value" data-field="lesion_assessment">N/A</span>
+    </div>
+
+    <div class="feature-summary-item">
+        <span class="metric-label">Subtlety</span>
+        <span class="metric-value" data-field="lesion_subtlety">N/A</span>
+    </div>
+
+    <div class="feature-summary-item">
+        <span class="metric-label">Suggested BI-RADS</span>
+        <span class="metric-value" data-field="lesion_birads">N/A</span>
+    </div>
+
+</div>
+ -->
                                 
                             </div>
                         </div>
                         <!-- === END Prediction Card === -->
-
-                        <!-- === REMOVED Lesion Summary Card (id="probability-card-content") === -->
                         
-
-                        <div class="step-card animate-slide-up" id="background-card-content"
-                            style="animation-delay:.15s;">
-                            <div class="step-header">
-                                <div class="step-header-left">
-                                    <h2>Background Tissue Density</h2>
-                                </div> <!-- Updated Title -->
-                                <span class="tooltip-icon">i<span class="tooltip-content">Inferred BI-RADS density
-                                        category based on image features.</span></span> <!-- Updated Tooltip -->
-                                <button type="button" class="maximize-card-btn" title="Maximize"><svg
-                                        xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                                        viewBox="0 0 16 16">
-                                        <path
-                                            d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" />
-                                    </svg></button>
-                            </div>
-                            <!-- === NEW Card Content Structure === -->
-                            <div class="card-content">
-                                <div class="flex items-center space-x-4 mb-3">
-                                    <span class="birads-badge" data-field="background_tissue_code_badge">?</span>
-                                    <div class="flex-1">
-                                        <p class="text-sm font-medium text-gray-500">BI-RADS Code</p>
-                                        <p class="text-lg font-semibold" data-field="background_tissue_code">—</p>
-                                    </div>
-                                    <div class="flex-1">
-                                        <p class="text-sm font-medium text-gray-500">Description</p>
-                                        <p class="text-lg font-semibold" data-field="background_tissue_text">—</p>
-                                    </div>
-                                </div>
-                                <p class="text-xs text-gray-500 mt-2" data-field="background_tissue_explain">—</p>
-
-                                <!-- === UPDATED LEGEND (T1, T2, T3, T4) === -->
-                                <div class="birads-legend">
-                                    <h4 class="legend-title">BI-RADS Density Legend</h4>
-                                    <div class="legend-item"><span class="birads-badge birads-t1">T1</span>
-                                        <p><strong>Almost entirely fatty:</strong> The breasts are almost entirely
-                                            composed of fat. (0-25% dense)</p>
-                                    </div>
-                                    <div class="legend-item"><span class="birads-badge birads-t2">T2</span>
-                                        <p><strong>Scattered areas of fibroglandular density:</strong> There are
-                                            scattered areas of density. (26-50% dense)</p>
-                                    </div>
-                                    <div class="legend-item"><span class="birads-badge birads-t3">T3</span>
-                                        <p><strong>Heterogeneously dense:</strong> The breasts are heterogeneously
-                                            dense, which may obscure small masses. (51-75% dense)</p>
-                                    </div>
-                                    <div class="legend-item"><span class="birads-badge birads-t4">T4</span>
-                                        <p><strong>Extremely dense:</strong> The breasts are extremely dense, which
-                                            lowers the sensitivity of mammography. (76-100% dense)</p>
-                                    </div>
-                                </div>
-                            </div>
-                            <!-- === END NEW Card Content Structure === -->
-                        </div>
-
-                        <!-- === START: MODIFIED EXPLANATIONS CARD === -->
-                        <div class="step-card animate-slide-up" id="explanation-card-content"
-                            style="animation-delay:.20s;">
-                            <div class="step-header">
-                                <div class="step-header-left">
-                                    <h2>Explanations</h2>
-                                </div> <!-- MODIFIED Title -->
-                                <!-- UPDATED Tooltip -->
-                                <span class="tooltip-icon">i<span class="tooltip-content">Analysis of features
-                                        contributing to the prediction.</span></span>
-                                <button type="button" class="maximize-card-btn" title="Maximize"><svg
-                                        xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                                        viewBox="0 0 16 16">
-                                        <path
-                                            d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" />
-                                    </svg></button>
-                            </div>
-                            <div class="card-content" id="explain-root">
-                                <!-- Content generated by renderExplanations JS -->
-
-                                <!-- Distance Metrics Container (will be hidden by JS) -->
-                                <div class="distance-metrics">
-                                    <div class="distance-metric bg-benign-light">
-                                        <span class="metric-label">Distance to Benign</span>
-                                        <span class="metric-value text-benign" data-field="distance_to_benign">—</span>
-                                    </div>
-                                    <div class="distance-metric bg-malignant-light">
-                                        <span class="metric-label">Distance to Malignant</span>
-                                        <span class="metric-value text-malignant"
-                                            data-field="distance_to_malignant">—</span>
-                                    </div>
-                                </div>
-                                
-                                <!-- MOVED ABNORMALITY CHART -->
-                                <h3 class="chart-sub-header" style="margin-top: 1.5rem; margin-bottom: 0.5rem;">Abnormality Scores</h3>
-                                <div class="abnormality-chart-wrapper" style="height: 250px;"> <canvas id="abnormality-chart"></canvas> </div>
-                                <!-- END MOVED CHART -->
-                            </div>
-                        </div>
-                        <!-- === END: MODIFIED EXPLANATIONS CARD === -->
-
-
-                        <!-- === START: HIDDEN ABNORMALITY CARD === -->
-                        <div class="step-card animate-slide-up" id="abnormality-card-content"
-                            style="animation-delay:.25s; display: none;"> <!-- CARD IS NOW HIDDEN -->
-                            <div class="step-header">
-                                <div class="step-header-left">
-                                    <h2>Abnormality Scores</h2>
-                                </div> <span class="tooltip-icon">i<span class="tooltip-content">Calculated scores for
-                                        different abnormality characteristics.</span></span>
-                                <button type="button" class="maximize-card-btn" title="Maximize"><svg
-                                        xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                                        viewBox="0 0 16 16">
-                                        <path
-                                            d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" />
-                                    </svg></button>
-                            </div>
-                            <div class="card-content">
-                                <!-- CHART WAS MOVED FROM HERE -->
-                            </div>
-                        </div>
-                        <!-- === END: HIDDEN ABNORMALITY CARD === -->
-
-
-                        <!-- === MODIFIED: Feature Contributions Card === -->
-                        <div class="step-card animate-slide-up" id="feature-summary-card-content"
-                            style="animation-delay:.35s;">
-                            <div class="step-header">
-                                <div class="step-header-left">
-                                    <h2>
-                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"
-                                            stroke-width="1.5" stroke="currentColor" style="width: 20px; height: 20px;">
-                                            <path stroke-linecap="round" stroke-linejoin="round"
-                                                d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
-                                        </svg>
-                                        <!-- MODIFIED TITLE -->
-                                        Top Feature Contributions
-                                    </h2>
-                                </div>
-                                <span class="tooltip-icon">i<span class="tooltip-content">The top 10 features contributing to the Malignant (negative) or Benign (positive) prediction, based on your Python script's `top_malignant_delta` and `top_benign_delta` output.</span></span>
-                                <button type="button" class="maximize-card-btn" title="Maximize"><svg
-                                        xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor"
-                                        viewBox="0 0 16 16">
-                                        <path
-                                            d="M1.5 1a.5.5 0 0 0-.5.5v4a.5.5 0 0 1-1 0v-4A1.5 1.5 0 0 1 1.5 0h4a.5.5 0 0 1 0 1h-4zM10 .5a.5.5 0 0 1 .5-.5h4A1.5 1.5 0 0 1 16 1.5v4a.5.5 0 0 1-1 0v-4a.5.5 0 0 0-.5-.5h-4a.5.5 0 0 1-.5-.5zM.5 10a.5.5 0 0 1 .5.5v4a.5.5 0 0 0 .5.5h4a.5.5 0 0 1 0 1h-4A1.5 1.5 0 0 1 0 14.5v-4a.5.5 0 0 1 .5-.5zm15 0a.5.5 0 0 1 .5.5v4a1.5 1.5 0 0 1-1.5 1.5h-4a.5.5 0 0 1 0-1h4a.5.5 0 0 0 .5-.5v-4a.5.5 0 0 1 .5-.5z" />
-                                    </svg></button>
-                            </div>
-                            <div class="card-content" id="feature-summary-root">
-                                <!-- START: New Structure -->
-                                <!-- MODIFIED SUB-HEADER -->
-                                <h3 class="chart-sub-header text-malignant">Top Malignant-Leaning Features</h3>
-                                <!-- MODIFIED SUB-DESC -->
-                                <p class="chart-sub-desc">Top 10 features with a negative contribution, sorted from most malignant-leaning. (from `top_malignant_delta`)</p>
-                                <div class="split-layout-container">
-                                    <div class="tfc-table-wrapper">
-                                        <div class="table-wrapper-scroll" id="fsummary-malignant-table-scroll"
-                                            style="max-height: 300px;">
-                                            <table class="data-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Feature</th>
-                                                        <th>Contribution</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody id="fsummary-malignant-body"></tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                    <div class="split-chart-wrapper">
-                                        <canvas id="fsummary-malignant-chart"></canvas>
-                                    </div>
-                                </div>
-
-                                <!-- MODIFIED SUB-HEADER -->
-                                <h3 class="chart-sub-header text-benign">Top Benign-Leaning Features</h3>
-                                <!-- MODIFIED SUB-DESC -->
-                                <p class="chart-sub-desc">Top 10 features with a positive contribution, sorted from most benign-leaning. (from `top_benign_delta`)</p>
-                                <div class="split-layout-container">
-                                    <div class="tfc-table-wrapper">
-                                        <div class="table-wrapper-scroll" id="fsummary-benign-table-scroll"
-                                            style="max-height: 300px;">
-                                            <table class="data-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Feature</th>
-                                                        <th>Contribution</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody id="fsummary-benign-body"></tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                    <div class="split-chart-wrapper">
-                                        <canvas id="fsummary-benign-chart"></canvas>
-                                    </div>
-                                </div>
-                                <!-- END: New Structure -->
-
-                                <!-- These data-fields are no longer displayed but are set by JS for CSV export -->
-                                <div style="display:none;">
-                                    <span data-field="malignant_features"></span>
-                                    <span data-field="benign_features"></span>
-                                    <span data-field="all_features"></span>
-                                </div>
-                            </div>
-                        </div>
-                        <!-- === END: Feature Contributions Card === -->
-
-                        <!-- === REMOVED: Top Feature Contributions Card === -->
-                        
-
                         <!-- === START: Wrapper for side-by-side feature cards === -->
                         <div class="wide-card-container">
 
@@ -751,7 +1014,7 @@ ob_end_clean();
                                                 <path stroke-linecap="round" stroke-linejoin="round"
                                                     d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12" />
                                             </svg>
-                                            All Detected Features (Tables)
+                                            Selected Features (Tables)
                                         </h2>
                                     </div>
                                     <span class="tooltip-icon">i<span class="tooltip-content">All contributing features from your Python script's `all_detected_delta` output. Sorted from most Benign-leaning (positive) to most Malignant-leaning (negative).</span></span>
@@ -791,7 +1054,7 @@ ob_end_clean();
                                                 <path stroke-linecap="round" stroke-linejoin="round"
                                                     d="M3 7.5L7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" />
                                             </svg>
-                                            All Detected Features (Charts)
+                                           Selected Features (Charts)
                                         </h2>
                                     </div>
                                     <span class="tooltip-icon">i<span class="tooltip-content">All contributing features from your Python script's `all_detected_delta` output. Sorted from most Benign-leaning (positive) to most Malignant-leaning (negative).</span></span>
@@ -832,925 +1095,1090 @@ ob_end_clean();
         </div>
     </div>
 
-
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // === Element Refs ===
-            const fileInput = document.getElementById('file-input');
-            const submitBtn = document.getElementById('submit-btn');
-            const clearBtn = document.getElementById('clear-btn');
-            const form = document.getElementById('image-upload-form');
-            const spinner = document.getElementById('spinner');
-            const btnText = document.getElementById('btn-text');
-            const skeletonLoader = document.getElementById('skeleton-loader');
-            const uploadArea = document.getElementById('upload-area');
-            const resultsContainer = document.getElementById('results-container');
-            const resultsGrid = document.getElementById('results-grid');
-            const imageModalOverlay = document.getElementById('image-modal-overlay');
-            const cardModalOverlay = document.getElementById('card-modal-overlay');
-            const cardModalContent = document.getElementById('card-modal-content');
-            const cardModalTitle = cardModalContent.querySelector('.modal-title');
-            const cardModalBody = cardModalContent.querySelector('.modal-body');
-            const closeCardModalBtn = cardModalContent.querySelector('.close-modal-btn');
-            const errorContainer = document.getElementById('error-container');
-            const previewWrapper = document.getElementById('image-preview-wrapper');
-            const resultsPlaceholder = document.getElementById('results-placeholder');
-
-            // --- History Refs (NEW) ---
-            const historyCard = document.getElementById('history-card');
-            const historyList = document.getElementById('history-list');
-            const historyPlaceholder = document.getElementById('history-placeholder');
-            const clearHistoryBtn = document.getElementById('clear-history-btn');
-
-
-            // === State ===
-            let activeCharts = {}; // Use object to store charts by ID
-            let currentMaximizedChartId = null;
-            const PRETTY_NAMES = window.__PRETTY_NAMES__ || {}; // Load pretty names
-
-            // === Persisted state (localStorage) ===
-            const STORAGE_KEY = 'woa_result_state_v3'; // Single key for last run
-            const HISTORY_KEY = 'woa_history_v1'; // NEW: Key for history array
-
-            function loadState() { try { const r = localStorage.getItem(STORAGE_KEY); return r ? JSON.parse(r) : null; } catch (e) { return null; } }
-            function saveState(p) { try { const pr = loadState() || {}; let n = { ...pr, ...p, savedAt: Date.now() }; let pl = JSON.stringify(n); if (pl.length > 4_500_000) { delete n.previewDataUrl; pl = JSON.stringify(n); } localStorage.setItem(STORAGE_KEY, pl); } catch (e) { console.warn('State save failed:', e); } }
-            function clearState() { try { localStorage.removeItem(STORAGE_KEY); } catch (e) { } }
-
-            // --- History Functions (NEW) ---
-            function loadHistory() {
-                try {
-                    const h = localStorage.getItem(HISTORY_KEY);
-                    return h ? JSON.parse(h) : [];
-                } catch (e) {
-                    return [];
-                }
-            }
-            function saveHistory(history) {
-                try {
-                    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
-                } catch (e) {
-                    console.warn('History save failed:', e);
-                }
-            }
-            function addResultToHistory(payload) {
-                if (!payload?.result) return;
-                try {
-                    let history = loadHistory();
-                    const historyItem = {
-                        id: new Date().toISOString() + '_' + Math.random().toString(36).substring(2, 9),
-                        savedAt: Date.now(),
-                        result: payload.result,
-                        imagePath: payload.image,
-                        filename: fileInput?.files?.[0]?.name || 'N/A'
-                    };
-                    history.unshift(historyItem); // Add to beginning
-                    if (history.length > 20) history.pop(); // Limit to 20 items
-                    saveHistory(history);
-                    renderHistory(); // Update UI
-                } catch (e) {
-                    console.error("Failed to add to history:", e);
-                }
-            }
-            function renderHistory() {
-                const history = loadHistory();
-                if (history.length === 0) {
-                    historyList.innerHTML = '';
-                    historyPlaceholder.style.display = 'block';
-                    clearHistoryBtn.style.display = 'none';
-                    return;
-                }
-                historyPlaceholder.style.display = 'none';
-                clearHistoryBtn.style.display = 'inline-flex';
-
-                historyList.innerHTML = history.map(item => {
-                    const pred = item.result?.final_prediction || 'N/A';
-                    const predClass = pred.toLowerCase().startsWith('mal') ? 'history-item-malignant' : 'history-item-benign';
-                    const date = new Date(item.savedAt).toLocaleString(undefined, {
-                        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                    });
-                    return `
-                            <div class="history-item" data-history-id="${escapeHTML(item.id)}">
-                                <div class="history-item-left">
-                                    <span class="history-item-filename">${escapeHTML(item.filename)}</span>
-                                    <span class="history-item-date">${escapeHTML(date)}</span>
-                                </div>
-                                <div class="history-item-right">
-                                    <span class="pill ${predClass}">${escapeHTML(pred)}</span>
-                                </div>
-                            </div>
-                            `;
-                }).join('');
-            }
-            // --- End History Functions ---
-
-
-            // === Get Computed CSS Colors ===
-            const computedStyles = getComputedStyle(document.documentElement);
-            const chartColors = {
-                // Main colors from CSS variables
-                accentGlow: computedStyles.getPropertyValue('--accent-glow').trim(),
-                accentGlowTint: computedStyles.getPropertyValue('--accent-glow-tint').trim(),
-                accentSuccess: computedStyles.getPropertyValue('--accent-success').trim() || 'rgba(46, 204, 113, 0.7)',
-                accentWarning: computedStyles.getPropertyValue('--accent-warning').trim() || 'rgba(231, 76, 60, 0.7)',
-                textDark: computedStyles.getPropertyValue('--text-dark').trim(),
-                borderColor: computedStyles.getPropertyValue('--border-color').trim(),
-                bgDark: computedStyles.getPropertyValue('--bg-dark').trim(),
-
-                // Pastel colors for charts (from comparison.php)
-                pastelBenign: 'rgba(132, 204, 145, 0.7)', // pastel green
-                pastelMalignant: 'rgba(252, 165, 165, 0.7)', // pastel red
-
-                // Pastel colors for probability chart
-                probBenign: 'rgba(144, 238, 144, 0.8)', // light green
-                probMalignant: 'rgba(255, 182, 193, 0.8)'  // light pink
-            };
-            const PASTELS = ['rgba(99, 179, 237, 0.7)', 'rgba(132, 204, 145, 0.7)', 'rgba(250, 202, 154, 0.7)', 'rgba(196, 181, 253, 0.7)', 'rgba(252, 165, 165, 0.7)', 'rgba(153, 246, 228, 0.7)'];
-
-            // === Utility Functions ===
-            function showError(m) { errorContainer.innerHTML = `<div class="step-card error-card animate-slide-up"><strong>Error:</strong> ${m}</div>`; }
-            function renderToCanvas(f) { return new Promise((res, rej) => { const isTiff = f.type === 'image/tiff' || f.name.toLowerCase().endsWith('.tif') || f.name.toLowerCase().endsWith('.tiff'); const rdr = new FileReader(); if (isTiff) { rdr.onload = e => { try { Tiff.initialize({ TOTAL_MEMORY: 16777216 * 10 }); const tiff = new Tiff({ buffer: e.target.result }); res(tiff.toCanvas()); } catch (err) { rej(err); } }; rdr.onerror = rej; rdr.readAsArrayBuffer(f); } else { rdr.onload = e => { const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = img.width; c.height = img.height; c.getContext('2d').drawImage(img, 0, 0); res(c); }; img.onerror = rej; img.src = e.target.result; }; rdr.onerror = rej; rdr.readAsDataURL(f); } }); }
-            function scaleCanvasToFit(sC, mW, mH) { const w = sC.width, h = sC.height; const sc = Math.min(mW / w, mH / h, 1); const o = document.createElement('canvas'); o.width = Math.round(w * sc); o.height = Math.round(h * sc); o.getContext('2d').drawImage(sC, 0, 0, o.width, o.height); return o; }
-            function displayCanvas(c, cE) { const eC = cE.querySelector('canvas'); if (eC) eC.remove(); cE.prepend(c); cE.style.display = 'flex'; }
-            function handleFileSelect(file) {
-                if (!file) {
-                    if (fileInput.files.length > 0) {
-                        file = fileInput.files[0];
-                    } else {
-                        return; // No file selected
-                    }
-                }
-                const f = file;
-                renderToCanvas(f).then(rC => { const mW = previewWrapper.clientWidth || 900; const mH = 400; const sc = scaleCanvasToFit(rC, mW, mH); previewWrapper.dataset.fullImage = rC.toDataURL(); displayCanvas(sc, previewWrapper); const nE = document.getElementById('image-filename'); if (nE) { nE.textContent = f.name; nE.style.display = 'block'; } submitBtn.disabled = false; clearBtn.style.display = 'inline-flex'; uploadArea.style.display = 'none'; }).catch(err => { console.error(err); showError('Could not read or render image.'); });
-            }
-            function closeCardModal() {
-                cardModalOverlay.classList.remove('visible');
-                document.body.style.overflow = '';
-                cardModalBody.innerHTML = '';
-                // Destroy all modal chart instances
-                Object.keys(activeCharts).forEach(key => {
-                    if (key.startsWith('modal_')) {
-                        activeCharts[key].destroy();
-                        delete activeCharts[key];
-                    }
-                });
-            }
-            function escapeHTML(s) { return String(s ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;'); }
-
-
-            // === Modal Display Logic ===
-            function showContentInModal(title, contentHtml, cardId = null) {
-                cardModalTitle.textContent = title;
-                cardModalBody.innerHTML = contentHtml; // Inject the cloned content first
-                cardModalOverlay.classList.add('visible');
-                document.body.style.overflow = 'hidden';
-
-                let chartIdsToRender = [];
-
-                if (cardId) {
-                    // MODIFIED: Removed 'tfc-card-content' case
-                    if (cardId === 'all-features-tables-card') {
-                        chartIdsToRender = []; // No chart, just table
-                    } else if (cardId === 'all-features-charts-card') {
-                        chartIdsToRender = ['all-features-chart'];
-                    } else if (cardId === 'prediction-card-content') {
-                        // MODIFIED: Removed 'prediction-gauge-chart'
-                        chartIdsToRender = [];
-                    // *** MODIFICATION: REMOVED 'probability-card-content' else if block ***
-                    // === START MODIFICATION ===
-                    } else if (cardId === 'explanation-card-content') {
-                        chartIdsToRender = ['abnormality-chart']; // This card now contains the chart
-                    // === END MODIFICATION ===
-                    } else if (cardId === 'background-card-content') {
-                        chartIdsToRender = []; // No chart
-                    }
-                    // (NEW) Add case for the new feature summary card
-                    else if (cardId === 'feature-summary-card-content') {
-                        // UPDATED: Add new chart IDs
-                        chartIdsToRender = ['fsummary-malignant-chart', 'fsummary-benign-chart'];
-                    }
-                }
-
-
-                requestAnimationFrame(() => { // Ensure DOM is updated
-                    const resultData = window.__PREDICT__?.result;
-                    if (!resultData) { console.error("No result data for modal chart"); return; }
-
-                    chartIdsToRender.forEach(id => {
-                        const canvasInModal = cardModalBody.querySelector(`#${id}`);
-                        if (!canvasInModal) { console.error(`Canvas #${id} not found in modal body.`); return; }
-
-                        let container = canvasInModal.closest('.split-chart-wrapper, .abnormality-chart-wrapper, #probability-chart-container, .prediction-visualizer-section, .all-features-chart-wrapper');
-                        if (!container) { console.error("Could not find container for chart:", id); return; }
-
-                        // Set height for modal charts
-                        // MODIFIED: Removed 'prediction-gauge-chart' case
-                        // *** MODIFICATION: REMOVED 'probability-chart' else if block ***
-                        if (id === 'abnormality-chart') container.style.height = '400px';
-                        else if (id.startsWith('tfc-')) container.style.height = '300px';
-                        // (NEW) Add height for fsummary charts
-                        else if (id.startsWith('fsummary-')) container.style.height = '300px';
-                        else if (id === 'all-features-chart') container.style.height = '800px'; // Taller for modal
-
-                        const ctx = canvasInModal.getContext('2d');
-                        if (!ctx) { console.error(`Could not get 2D context for modal canvas #${id}.`); return; }
-
-                        if (activeCharts['modal_' + id]) activeCharts['modal_' + id].destroy();
-
-                        try {
-                            let newChart;
-                            // Find the original chart config from the main page to clone
-                            const originalChart = activeCharts[id];
-                            if (originalChart) {
-                                // Create a new chart instance using the original's config
-                                newChart = new Chart(ctx, originalChart.config);
-                                activeCharts['modal_' + id] = newChart;
-                            } else {
-                                console.warn(`Original chart for ${id} not found to clone for modal.`);
-                            }
-                        } catch (chartError) {
-                            console.error(`Error creating chart #${id} in modal:`, chartError);
-                        }
-                    });
-                });
-            }
-
-            // === Event Listeners ===
-            uploadArea.addEventListener('click', () => fileInput.click());
-            fileInput.addEventListener('change', () => handleFileSelect()); // Simplified
-            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => { uploadArea.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, false); });
-            ['dragenter', 'dragover'].forEach(ev => { uploadArea.addEventListener(ev, () => uploadArea.classList.add('dragover'), false); });
-            ['dragleave', 'drop'].forEach(ev => { uploadArea.addEventListener(ev, () => uploadArea.classList.remove('dragover'), false); });
-            uploadArea.addEventListener('drop', e => { fileInput.files = e.dataTransfer.files; handleFileSelect(); });
-
-            form.addEventListener('submit', async e => {
-                e.preventDefault(); submitBtn.disabled = true; spinner.style.display = 'block'; btnText.textContent = 'Analyzing...'; skeletonLoader.style.display = 'block'; resultsContainer.style.display = 'none'; resultsPlaceholder.style.display = 'none'; errorContainer.innerHTML = '';
-                Object.values(activeCharts).forEach(c => c.destroy()); activeCharts = {}; // Clear all charts
-                try {
-                    const formData = new FormData(form); formData.set('ajax', '1'); formData.delete('mock');
-                    const response = await fetch(window.location.href, { method: 'POST', body: formData }); const contentType = response.headers.get('content-type') || '';
-                    if (!response.ok) { const text = await response.text(); throw new Error(`HTTP ${response.status}\n\n${text.slice(0, 2000)}`); }
-                    if (!contentType.includes('application/json')) { const text = await response.text(); if (text.includes("POST Content-Length")) { throw new Error("File too large."); } throw new Error(`Expected JSON, got HTML/text:\n\n${text.slice(0, 500)}...`); }
-                    const payload = await response.json(); console.log('AJAX payload:', payload);
-                    if (payload.ok && payload.result) {
-                        window.__PREDICT__ = payload;
-                        displayResults(payload.result);
-                        saveState({ result: payload.result, imagePath: payload.image || null, filename: fileInput?.files?.[0]?.name || null });
-                        addResultToHistory(payload); // NEW: Add to history
-                        resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    } else { throw new Error(payload.error || payload.noise || 'Backend error.'); }
-                } catch (err) { console.error('Fetch Error:', err); showError(err?.message?.replace(/\n/g, '<br>') || 'Analysis error.'); }
-                finally { skeletonLoader.style.display = 'none'; spinner.style.display = 'none'; btnText.textContent = 'Run Prediction'; submitBtn.disabled = false; }
-            });
-
-            clearBtn.addEventListener('click', () => { clearState(); fileInput.value = ''; previewWrapper.style.display = 'none'; previewWrapper.removeAttribute('data-full-image'); const eC = previewWrapper.querySelector('canvas'); if (eC) eC.remove(); const nE = document.getElementById('image-filename'); if (nE) nE.style.display = 'none'; resultsContainer.style.display = 'none'; errorContainer.innerHTML = ''; skeletonLoader.style.display = 'none'; resultsPlaceholder.style.display = 'block'; btnText.textContent = 'Run Prediction'; submitBtn.disabled = true; clearBtn.style.display = 'none'; uploadArea.style.display = 'block'; Object.values(activeCharts).forEach(c => c.destroy()); activeCharts = {}; window.__PREDICT__ = null; window.scrollTo({ top: 0, behavior: 'smooth' }); });
-            document.body.addEventListener('click', e => { if (e.target.closest('.maximize-btn')) { const dU = document.getElementById('image-preview-wrapper')?.dataset?.fullImage; if (dU) showImageInModal(dU); } });
-            function showImageInModal(dU) { const i = new Image(); i.src = dU; i.style.maxWidth = '90vw'; i.style.maxHeight = '90vh'; i.style.borderRadius = '12px'; imageModalOverlay.innerHTML = ''; imageModalOverlay.appendChild(i); imageModalOverlay.classList.add('visible'); }
-            imageModalOverlay.addEventListener('click', e => { if (e.target === imageModalOverlay) imageModalOverlay.classList.remove('visible'); });
-            closeCardModalBtn.addEventListener('click', closeCardModal);
-            cardModalOverlay.addEventListener('click', e => { if (e.target === cardModalOverlay) closeCardModal(); });
-
-            // --- History Event Listeners (NEW) ---
-            clearHistoryBtn.addEventListener('click', () => {
-                saveHistory([]); // Clear storage
-                renderHistory(); // Re-render empty state
-            });
-
-            historyList.addEventListener('click', (e) => {
-                const itemEl = e.target.closest('.history-item[data-history-id]');
-                if (!itemEl) return;
-
-                const id = itemEl.dataset.historyId;
-                const history = loadHistory();
-                const item = history.find(h => h.id === id);
-
-                if (item) {
-                    console.log("Loading from history:", item);
-                    // 1. Set global predict data
-                    window.__PREDICT__ = { ok: true, result: item.result, image: item.imagePath };
-                    // 2. Display the results
-                    displayResults(item.result);
-                    // 3. Display the image
-                    if (item.imagePath) {
-                        const img = new Image();
-                        img.onload = () => {
-                            const rC = document.createElement('canvas'); rC.width = img.width; rC.height = img.height; rC.getContext('2d').drawImage(img, 0, 0);
-                            const dU = rC.toDataURL(); previewWrapper.dataset.fullImage = dU;
-                            const mW = previewWrapper.clientWidth || 900; const mH = 400; const sc = scaleCanvasToFit(rC, mW, mH);
-                            displayCanvas(sc, previewWrapper);
-                            const nE = document.getElementById('image-filename'); if (nE) { nE.textContent = item.filename || 'image'; nE.style.display = 'block'; }
-                            submitBtn.disabled = false;
-                            uploadArea.style.display = 'none';
-                            clearBtn.style.display = 'inline-flex';
-                        };
-                        img.onerror = () => { console.warn("Could not load history image:", item.imagePath); };
-                        img.src = item.imagePath;
-                    }
-                    // 4. Scroll to results
-                    resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }
-            });
-
-            // --- Sticky Column Logic (NEW) ---
-            const toggleStickyBtn = document.getElementById('toggle-sticky-btn');
-            const leftColumn = document.querySelector('.left-column');
-            const stickyBtnText = document.getElementById('sticky-btn-text');
-            const pinIcon = toggleStickyBtn?.querySelector('.pin-icon');
-            const unpinIcon = toggleStickyBtn?.querySelector('.unpin-icon');
-            const STICKY_KEY = 'woa_sticky_pref';
-
-            function setStickyState(isSticky) {
-                if (!leftColumn || !toggleStickyBtn || !stickyBtnText || !pinIcon || !unpinIcon) return;
-
-                if (isSticky) {
-                    leftColumn.classList.add('is-sticky');
-                    stickyBtnText.textContent = 'Unpin';
-                    pinIcon.style.display = 'none';
-                    unpinIcon.style.display = 'inline-block';
-                    toggleStickyBtn.setAttribute('aria-pressed', 'true');
-                } else {
-                    leftColumn.classList.remove('is-sticky');
-                    stickyBtnText.textContent = 'Pin Panel';
-                    pinIcon.style.display = 'inline-block';
-                    unpinIcon.style.display = 'none';
-                    toggleStickyBtn.setAttribute('aria-pressed', 'false');
-                }
-            }
-
-            if (toggleStickyBtn) {
-                toggleStickyBtn.addEventListener('click', () => {
-                    const wantsSticky = !leftColumn.classList.contains('is-sticky');
-                    setStickyState(wantsSticky);
-                    try {
-                        localStorage.setItem(STICKY_KEY, wantsSticky);
-                    } catch (e) { console.warn('Could not save sticky pref'); }
-                });
-            }
-
-            // Load sticky pref on init
-            try {
-                const storedSticky = localStorage.getItem(STICKY_KEY);
-                if (storedSticky === 'true') {
-                    setStickyState(true);
-                }
-            } catch (e) { }
-            // --- End Sticky Column Logic ---
-
-
-            // === NEW: Horizontal Bar Chart Renderer (from comparison.php) ===
-            // Renders a horizontal bar chart into a canvas
-            function renderHorizontalBarChart(canvasId, featuresData, barColor, valueLabel = 'Value') {
-                const cv = document.getElementById(canvasId);
-                if (!cv) { console.warn(`Canvas not found: ${canvasId}`); return; }
-                if (activeCharts[canvasId]) activeCharts[canvasId].destroy();
-
-                if (!featuresData || featuresData.length === 0) {
-                    const ctx = cv.getContext('2d');
-                    ctx.clearRect(0, 0, cv.width, cv.height);
-                    ctx.fillStyle = chartColors.textDark;
-                    ctx.textAlign = 'center';
-                    ctx.fillText(`No features found.`, cv.width / 2, cv.height / 2);
-                    cv.parentElement.style.height = '100px'; // collapse if no data
-                    return;
-                }
-
-                const labels = featuresData.map(f => PRETTY_NAMES[f[0]] || f[0]);
-                const data = featuresData.map(f => f[1]);
-                const bgColor = barColor || PASTELS[0];
-                const borderColor = bgColor.replace('0.7', '1').replace('0.8', '1');
-
-                // Dynamically set height
-                const chartHeight = Math.max(150, featuresData.length * 20); // 20px per bar, min 150px
-                cv.parentElement.style.height = `${chartHeight}px`;
-
-                activeCharts[canvasId] = new Chart(cv.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: valueLabel,
-                            data: data,
-                            backgroundColor: bgColor,
-                            borderColor: borderColor,
-                            borderWidth: 1,
-                            borderRadius: 4
-                        }]
-                    },
-                    options: {
-                        indexAxis: 'y',
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: { grid: { color: chartColors.borderColor }, ticks: { color: chartColors.textDark, font: { size: 10 }, callback: v => v.toFixed(2) } },
-                            y: { grid: { display: false }, ticks: { color: chartColors.textDark, font: { size: 10 } } }
-                        },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: { callbacks: { label: (ctx) => ` ${valueLabel}: ${ctx.parsed.x.toFixed(6)}` } }
-                        }
-                    }
-                });
-            }
-
-            // Renders a *single* combined, color-coded chart for all Z-Scores
-            function renderAllFeaturesChart(canvasId, zDataSorted) {
-                const cv = document.getElementById(canvasId);
-                if (!cv) { console.warn(`Canvas not found: ${canvasId}`); return; }
-                if (activeCharts[canvasId]) activeCharts[canvasId].destroy();
-
-                if (!zDataSorted || zDataSorted.length === 0) {
-                    const ctx = cv.getContext('2d');
-                    ctx.clearRect(0, 0, cv.width, cv.height);
-                    ctx.fillStyle = chartColors.textDark;
-                    ctx.textAlign = 'center';
-                    ctx.fillText(`No features found.`, cv.width / 2, cv.height / 2);
-                    cv.parentElement.style.height = '100px'; // collapse if no data
-                    return;
-                }
-                
-                // zDataSorted is expected to be an array of { label: '..', z: 0.5, ... }
-                const labels = zDataSorted.map(d => d.label);
-                const data = zDataSorted.map(d => d.z);
-                const colors = zDataSorted.map(d => d.z >= 0 ? chartColors.pastelBenign : chartColors.pastelMalignant);
-
-                const numFeatures = zDataSorted.length;
-                const chartHeight = Math.max(400, numFeatures * 18);
-
-                const chartWrapper = cv.parentElement;
-                if (chartWrapper) chartWrapper.style.height = `${chartHeight}px`;
-
-                // Sync table height if it exists
-                const tableScroll = document.getElementById('all-features-table-scroll');
-                if (tableScroll) tableScroll.style.maxHeight = `${chartHeight}px`;
-
-                activeCharts[canvasId] = new Chart(cv.getContext('2d'), {
-                    type: 'bar',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Z-Score', // This will be 'Contribution' now, but renderAllFeaturesChart uses 'z'
-                            data: data,
-                            backgroundColor: colors,
-                            borderWidth: 0,
-                            borderRadius: 4
-                        }]
-                    },
-                    options: {
-                        indexAxis: 'y',
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                position: 'top',
-                                ticks: { callback: v => v.toFixed(1) },
-                                grid: { color: chartColors.borderColor }
-                            },
-                            y: {
-                                ticks: { font: { size: 9 } },
-                                grid: { display: false }
-                            }
-                        },
-                        plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                                callbacks: {
-                                    label: ctx => `Contribution: ${ctx.parsed.x.toFixed(3)}` // Updated label
-                                }
-                            }
-                        }
-                    }
-                });
-            }
-
-
-            // === NEW: Color-coded Table Renderer ===
-            function renderColorCodedTable(tbodyId, featuresData, valueType = 'Value') {
-                const tableBody = document.getElementById(tbodyId);
-                if (!tableBody) { console.warn(`Table body not found: ${tbodyId}`); return; }
-
-                const rows = featuresData.map(([name, value]) => {
-                    const prettyName = PRETTY_NAMES[name] || name;
-                    const val = Number(value);
-                    const colorClass = val < 0 ? 'row-malignant' : 'row-benign';
-                    // === MODIFICATION HERE ===
-                    const formattedValue = val.toFixed(valueType === 'Z-Score' ? 4 : (valueType === 'Contribution' ? 6 : 6));
-                    // === END MODIFICATION ===
-
-                    return `<tr class="${colorClass}">
-                                <td>${escapeHTML(prettyName)} <span class="subtle-name">(${escapeHTML(name)})</span></td>
-                                <td class="mono"><strong>${formattedValue}</strong></td>
-                            </tr>`;
-                }).join('') || `<tr><td colspan="2">No features found.</td></tr>`;
-
-                tableBody.innerHTML = rows;
-            }
-
-
-            // === UPDATED displayResults Function ===
-            function displayResults(resultData) {
-                resultsContainer.style.display = 'block'; resultsPlaceholder.style.display = 'none';
-
-                // --- Prediction Card ---
-                const predEl = document.querySelector('#prediction-card-content [data-field="final_prediction"]');
-                const indEl = document.querySelector('#prediction-card-content .prediction-indicator');
-                const pred = resultData.final_prediction || '—';
-                const predClass = pred.toLowerCase();
-                const predColor = pred === 'Malignant' ? chartColors.accentWarning : chartColors.accentSuccess;
-                const predBgColor = pred === 'Malignant' ? chartColors.accentWarning : chartColors.accentSuccess; // Use same color for gauge
-
-                if (predEl) { predEl.textContent = pred; predEl.style.color = predColor; const pC = predEl.closest('.prediction-card'); if (pC) pC.className = `step-card prediction-card animate-slide-up prediction-${predClass}`; }
-                if (indEl) { const bSVG = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="${chartColors.accentSuccess}"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`; const mSVG = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="${chartColors.accentWarning}"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>`; indEl.innerHTML = pred === 'Malignant' ? mSVG : bSVG; }
-
-                const probs = resultData.probabilities || {};
-                const benProb = probs['Benign'] || 0;
-                const malProb = probs['Malignant'] || 0;
-                const confVal = Math.max(benProb, malProb);
-
-                // --- Prediction Gauge Visualizer (REMOVED) ---
-                const gaugeCanvas = document.getElementById('prediction-gauge-chart');
-                const ringLabelMain = document.querySelector('.final-vis .ring-main');
-                if (gaugeCanvas && ringLabelMain) {
-                    // This block will be skipped if the canvas is removed, but we'll clear the chart just in case.
-                    if (activeCharts['prediction-gauge-chart']) activeCharts['prediction-gauge-chart'].destroy();
-                    // We removed the HTML, so no new chart will be created.
-                }
-
-                // --- Distance Metrics (Hide as requested) ---
-                const elDistMetrics = document.querySelector('#explanation-card-content .distance-metrics');
-                if (elDistMetrics) {
-                    elDistMetrics.style.display = 'none';
-                }
-                // (Keep the data-field setting for CSV export)
-                const dB = Number(resultData.distance_to_benign);
-                const dM = Number(resultData.distance_to_malignant);
-                const elDB = document.querySelector('[data-field="distance_to_benign"]');
-                const elDM = document.querySelector('[data-field="distance_to_malignant"]');
-                if (elDB) elDB.textContent = Number.isFinite(dB) ? dB.toFixed(4) : 'N/A';
-                if (elDM) elDM.textContent = Number.isFinite(dM) ? dM.toFixed(4) : 'N/A';
-
-                // --- Add distance data to resultData for CSV ---
-                const tau = Number(resultData.tau);
-                if (Number.isFinite(dB) && dB > 0 && Number.isFinite(dM) && Number.isFinite(tau) && tau > 0) {
-                    const r = dM / dB;
-                    const malMargin = tau / r;
-                    const benMargin = r / tau;
-                    if (Number.isFinite(r)) resultData.distance_ratio = r.toFixed(6);
-                    if (Number.isFinite(malMargin)) { resultData.malignant_margin_x = malMargin.toFixed(6); resultData.malignant_margin_pct = ((malMargin - 1) * 100).toFixed(3) + '%'; }
-                    if (Number.isFinite(benMargin)) { resultData.benign_margin_x = benMargin.toFixed(6); resultData.benign_margin_pct = ((benMargin - 1) * 100).toFixed(3) + '%'; }
-                }
-
-
-                // --- Probability Chart (REMOVED) ---
-                // const probCanvas = document.getElementById('probability-chart');
-                // ... (code removed) ...
-
-                // --- Background Card ---
-                const bg = resultData.background_tissue || {};
-                const code = bg.code?.toUpperCase() ?? '—';
-                const badgeEl = document.querySelector('#background-card-content [data-field="background_tissue_code_badge"]');
-                const codeEl = document.querySelector('#background-card-content [data-field="background_tissue_code"]');
-                const textEl = document.querySelector('#background-card-content [data-field="background_tissue_text"]');
-                const explainEl = document.querySelector('#background-card-content [data-field="background_tissue_explain"]');
-
-                if (badgeEl) {
-                    badgeEl.textContent = code.slice(0, 1) || '?'; // Show first letter or ?
-                    badgeEl.className = 'birads-badge'; // Reset classes
-                    if (code.startsWith('A') || code.startsWith('T1')) badgeEl.classList.add('birads-t1');
-                    else if (code.startsWith('B') || code.startsWith('T2')) badgeEl.classList.add('birads-t2');
-                    else if (code.startsWith('C') || code.startsWith('T3')) badgeEl.classList.add('birads-t3');
-                    else if (code.startsWith('D') || code.startsWith('T4')) badgeEl.classList.add('birads-t4');
-                }
-                if (codeEl) codeEl.textContent = code;
-                if (textEl) textEl.textContent = bg.text ?? '—';
-                if (explainEl) explainEl.textContent = bg.explain ?? '—';
-
-
-                // --- Explanations Card (Rendered by JS function) ---
-                (function renderExplanations() {
-                    const root = document.getElementById('explain-root');
-                    if (!root) { console.error("Could not find #explain-root element."); return; }
-                    const iconInfo = `<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 110-16 8 8 0 010 16zM9 9h2v6H9V9zm1-4a1.25 1.25 0 100 2.5A1.25 1.25 0 0010 5z"/></svg>`;
-                    const iconShield = `<svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 2l7 3v5c0 4.418-2.686 7.418-7 8-4.314-.582-7-3.582-7-8V5l7-3z"/></svg>`;
-                    function decorateMath(s) { if (!s) return ''; return `<span class="math-inline">${s.replace(/<=/g, '≤').replace(/->/g, '→').replace(/\*/g, '·')}</span>`; }
-                    function metricsToChips(summary) { if (!summary) return ''; const c = []; const re = /([A-Za-z][A-Za-z_ ]+)\s*=\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/gi; let m; while ((m = re.exec(summary)) !== null) c.push(`<span class="metric-chip"><span class="k">${m[1].trim()}</span><span class="v">${Number(m[2]).toFixed(2)}</span></span>`); return c.join(''); }
-                    function riskBadge(summary) { const s = (summary || '').toLowerCase(); if (s.includes('risk level: high')) return `<span class="badge badge-risk high">${iconShield} High Risk</span>`; if (s.includes('risk level: medium')) return `<span class="badge badge-risk med">${iconShield} Medium Risk</span>`; if (s.includes('risk level: low')) return `<span class="badge badge-risk low">${iconShield} Low Risk</span>`; return ''; }
-                    function patternBadge(ct, sum) { const b = `${ct || ''} ${sum || ''}`.toLowerCase(); if (b.includes('→ malignant') || b.includes('malignant pattern')) return `<span class="badge badge-pattern malignant">${iconInfo} Malignant Pattern</span>`; if (b.includes('benign pattern') || b.includes('→ benign')) return `<span class="badge badge-pattern benign">${iconInfo} Benign Pattern</span>`; return ''; }
-
-                    const classExplanations = (Array.isArray(resultData.explanation?.class) ? resultData.explanation.class : [])
-                        .filter(e => !(e || '').includes("Mahalanobis ratio:")) // This filter was already here and matches your request
-                        .map(e => `${escapeHTML(e)}`);
-
-                    const cExp = classExplanations.length > 0 ? classExplanations.join('<br>') : '—';
-                    const aSumm = resultData.explanation?.abnormality_summary || '—';
-
-                    // Find existing elements to preserve distance metrics AND moved chart
-                    const distanceMetricsEl = root.querySelector('.distance-metrics');
-                    const chartWrapperEl = root.querySelector('.abnormality-chart-wrapper'); // Find the chart wrapper
-                    const chartHeaderEl = root.querySelector('.chart-sub-header'); // Find the chart header
-
-                    const classHTML = (cExp && cExp !== '—') ? `<div class="explain-section"><div class="explain-body">${decorateMath(cExp || '')}</div></div>` : '';
-                    const metricsHTML = metricsToChips(aSumm || '');
-                    const badgesHTML = `<div class="badge-row">${patternBadge(cExp, aSumm)}${riskBadge(aSumm)}</div>`;
-                    const summaryHTML = `<div class="explain-section"><div class="explain-title"><span class="dot"></span>Abnormality Summary</div><div class="explain-body">${metricsHTML || ''}${badgesHTML}</div></div>`;
-
-                    root.innerHTML = classHTML + summaryHTML;
-                    if (distanceMetricsEl) {
-                        // Re-append the distance metrics, but it will be hidden by the style.display = 'none' logic
-                        root.appendChild(distanceMetricsEl);
-                    }
-                    if (chartHeaderEl) {
-                         // Re-append the chart header
-                         root.appendChild(chartHeaderEl);
-                    }
-                    if (chartWrapperEl) {
-                        // Re-append the chart wrapper
-                        root.appendChild(chartWrapperEl);
-                    }
-                })();
-
-
-                // --- Abnormality Scores Chart ---
-                const abnScores = resultData.abnormality_scores || {};
-                const abnCtx = document.getElementById('abnormality-chart')?.getContext('2d');
-                if (abnCtx) {
-                    if (activeCharts['abnormality-chart']) activeCharts['abnormality-chart'].destroy();
-                    const abnVals = Object.values(abnScores); const abnLabels = Object.keys(abnScores).map(k => PRETTY_NAMES[k] || k);
-                    activeCharts['abnormality-chart'] = new Chart(abnCtx, { type: 'bar', data: { labels: abnLabels, datasets: [{ label: 'Score', data: abnVals, backgroundColor: abnVals.map((_, i) => PASTELS[i % PASTELS.length]), borderWidth: 0, borderRadius: 4 }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true, ticks: { color: chartColors.textDark }, grid: { color: chartColors.borderColor } }, y: { ticks: { font: { size: 11 }, color: chartColors.textDark }, grid: { display: false } } }, plugins: { legend: { display: false }, tooltip: { } } } });
-                }
-
-                // --- (NEW) Lesion Summary Card (populates data for probability-card-content) ---
-                // *** This content is now inside the prediction card, but the logic remains the same ***
-                const lesionSubtype = resultData.lesion_subtype;
-                let lesionText = "N/A";
-                if (lesionSubtype && lesionSubtype.category) {
-                    lesionText = lesionSubtype.category;
-                    const details = [];
-                    if (lesionSubtype.details.shape) details.push(lesionSubtype.details.shape);
-                    if (lesionSubtype.details.margin) details.push(lesionSubtype.details.margin);
-                    if (lesionSubtype.details.type) details.push(lesionSubtype.details.type);
-                    if (lesionSubtype.details.distribution) details.push(lesionSubtype.details.distribution);
-                    if (details.length > 0) {
-                        lesionText += ` (${details.join(', ')})`;
-                    }
-                } else if (resultData.abnormality_type) {
-                    // Fallback to abnormality_type if lesion_subtype is not present
-                    lesionText = resultData.abnormality_type;
-                }
-
-                const elLesion = document.querySelector('[data-field="lesion_subtype"]');
-                if (elLesion) elLesion.textContent = lesionText;
-
-                const elTotalFeat = document.querySelector('[data-field="total_features"]');
-                if (elTotalFeat) elTotalFeat.textContent = resultData["total number of features detected"] ?? 'N/A';
-
-                const elTotalMal = document.querySelector('[data-field="total_malignant"]');
-                if (elTotalMal) elTotalMal.textContent = resultData["total number of \"towards malignant\""] ?? 'N/A';
-
-                const elTotalBen = document.querySelector('[data-field="total_benign"]');
-                if (elTotalBen) elTotalBen.textContent = resultData["total number of \"towards benign\""] ?? 'N/A';
-                
-                // === START JAVASCRIPT MODIFICATION ===
-
-                // --- (MODIFIED) Feature Summary Card (populates feature-summary-card-content) ---
-                // Data is now sourced *directly* from the new 'delta' keys.
-                
-                // Process Malignant features from top_malignant_delta
-                const fsummaryMalignant = Array.isArray(resultData.top_malignant_delta) ? resultData.top_malignant_delta : [];
-                // Data is already [name, value] and sorted by Python.
-
-                // Process Benign features from top_benign_delta
-                const fsummaryBenign = Array.isArray(resultData.top_benign_delta) ? resultData.top_benign_delta : [];
-                // Data is already [name, value] and sorted by Python.
-
-                // Render the tables
-                renderColorCodedTable('fsummary-malignant-body', fsummaryMalignant, 'Contribution'); // Changed label
-                renderColorCodedTable('fsummary-benign-body', fsummaryBenign, 'Contribution'); // Changed label
-
-                // Render the charts (reverse() for horizontal bar chart display)
-                renderHorizontalBarChart('fsummary-malignant-chart', fsummaryMalignant.map(f => [f[0], f[1]]).reverse(), chartColors.pastelMalignant, 'Contribution'); // Changed label
-                renderHorizontalBarChart('fsummary-benign-chart', fsummaryBenign.map(f => [f[0], f[1]]).reverse(), chartColors.pastelBenign, 'Contribution'); // Changed label
-                // === (END) Feature Summary Tables & Charts ===
-
-                // (These data-fields are for CSV export and can remain)
-                const elMalFeat = document.querySelector('[data-field="malignant_features"]');
-                if (elMalFeat) elMalFeat.textContent = resultData["name of malignant features"] ?? 'N/A';
-
-                const elBenFeat = document.querySelector('[data-field="benign_features"]');
-                if (elBenFeat) elBenFeat.textContent = resultData["name of benign features"] ?? 'N/A';
-
-                const elAllFeat = document.querySelector('[data-field="all_features"]');
-                if (elAllFeat) elAllFeat.textContent = resultData["name of all detected features"] ?? 'N/A';
-                
-                // --- (MODIFIED) All Detected Features (from all_detected_delta) ---
-                
-                // Data is now sourced *directly* from 'all_detected_delta'
-                const allDetectedData = Array.isArray(resultData.all_detected_delta) ? resultData.all_detected_delta : [];
-                
-                // Sort by Contribution (Benign to Malignant) for both table and chart
-                // Python output seems to be Malignant-to-Benign, so we reverse-sort (b[1] - a[1])
-                const allDataSorted = [...allDetectedData].sort((a, b) => b[1] - a[1]);
-                
-                // Prepare data for the chart renderer (which expects {key, label, z})
-                // We adapt it to use {key, label, z: value}
-                const allDataSortedForChart = allDataSorted.map(([key, value]) => ({
-                    key: key,
-                    label: PRETTY_NAMES[key] || key,
-                    z: value // Use 'z' property as that's what renderAllFeaturesChart expects
-                }));
-
-                // --- All Detected Features Table ---
-                {
-                    const ztb = document.getElementById('all-features-body'); // Use existing ID
-                    if (ztb) {
-                        // Use renderColorCodedTable, pass the [key, value] array
-                        renderColorCodedTable('all-features-body', allDataSorted, 'Contribution'); // Changed label
-                    }
-                }
-
-                // --- All Detected Features Chart ---
-                // (Use the dedicated all-features chart renderer)
-                renderAllFeaturesChart('all-features-chart', allDataSortedForChart); // Pass the adapted data
-
-                // === END JAVASCRIPT MODIFICATION ===
-
-
-                // --- (NEW) Feature Contributions (TFC) (REMOVED) ---
-                // ... (logic was already removed) ...
-
-
-                // --- Re-attach Maximize Button Listeners ---
-                resultsGrid.querySelectorAll('.maximize-card-btn').forEach(b => {
-                    const nb = b.cloneNode(true); b.parentNode.replaceChild(nb, b); nb.addEventListener('click', e => {
-                        const c = e.target.closest('.step-card[id]');
-                        if (c?.id) {
-                            const t = c.querySelector('h2')?.textContent.trim() || 'Details';
-                            const ce = c.querySelector('.card-content');
-                            if (ce) {
-                                const cl = ce.cloneNode(true);
-                                // Pass the *card's* ID to the modal function
-                                showContentInModal(t, cl.innerHTML, c.id);
-                            }
-                        }
-                    });
-                });
-
-                // --- Re-attach Print/CSV Listeners ---
-                const printBtn = document.getElementById('print-btn'); if (printBtn) { const nPB = printBtn.cloneNode(true); printBtn.parentNode.replaceChild(nPB, printBtn); nPB.addEventListener('click', () => window.print()); }
-                const csvBtn = document.getElementById('csv-btn'); if (csvBtn) { const nCB = csvBtn.cloneNode(true); csvBtn.parentNode.replaceChild(nCB, csvBtn); nCB.addEventListener('click', () => openCSVPreview(resultData)); }
-            } // End displayResults
-
-            // === CSV Functions (Updated with new fields) ===
-            function downloadCSV(rd) {
-                let c = "Category,Parameter,Value\r\n";
-                const e = (s) => { if (s == null) return ''; let r = String(s); if (r.includes(',') || r.includes('"') || r.includes('\n')) r = '"' + r.replace(/"/g, '""') + '"'; return r; };
-                c += `Prediction,final_prediction,${e(rd.final_prediction)}\r\n`;
-                if (rd.probabilities) Object.entries(rd.probabilities).forEach(([k, v]) => c += `Probability,${e(k)},${e(v)}\r\n`);
-
-                // --- (MODIFIED) Add new fields for CSV ---
-                c += `Summary,lesion_subtype,${e(rd.lesion_subtype?.category ? `${rd.lesion_subtype.category} (${Object.values(rd.lesion_subtype.details).join(', ')})` : rd.abnormality_type)}\r\n`;
-                c += `Summary,total_features_detected,${e(rd["total number of features detected"])}\r\n`;
-                c += `Summary,total_towards_malignant,${e(rd["total number of \"towards malignant\""])}\r\n`;
-                c += `Summary,total_towards_benign,${e(rd["total number of \"towards benign\""])}\r\n`;
-                c += `Summary,malignant_features,${e(rd["name of malignant features"])}\r\n`;
-                c += `Summary,benign_features,${e(rd["name of benign features"])}\r\n`;
-                c += `Summary,all_detected_features,${e(rd["name of all detected features"])}\r\n`;
-                // --- (END MODIFIED) ---
-
-                c += `Decision,distance_to_benign,${e(rd.distance_to_benign)}\r\n`;
-                c += `Decision,distance_to_malignant,${e(rd.distance_to_malignant)}\r\n`;
-                c += `Decision,tau,${e(rd.tau)}\r\n`;
-                c += `Decision,ratio_decision_rule,${e(rd.ratio_decision)}\r\n`;
-                c += `Decision,distance_ratio,${e(rd.distance_ratio ?? '')}\r\n`;
-                c += `Decision,malignant_margin_x,${e(rd.malignant_margin_x ?? '')}\r\n`;
-                c += `Decision,malignant_margin_pct,${e(rd.malignant_margin_pct ?? '')}\r\n`;
-                c += `Decision,benign_margin_x,${e(rd.benign_margin_x ?? '')}\r\n`;
-                c += `Decision,benign_margin_pct,${e(rd.benign_margin_pct ?? '')}\r\n`;
-                c += `Decision,decision_verdict,${e(rd.decision_verdict ?? '')}\r\n`;
-                c += `Abnormality,type,${e(rd.abnormality_type)}\r\n`;
-                if (rd.abnormality_scores) Object.entries(rd.abnormality_scores).forEach(([k, v]) => c += `Abnormality Score,${e(PRETTY_NAMES[k] || k)},${e(v)}\r\n`);
-                if (rd.background_tissue) { c += `Background,code,${e(rd.background_tissue.code)}\r\n`; c += `Background,text,${e(rd.background_tissue.text)}\r\n`; c += `Background,explanation,${e(rd.background_tissue.explain)}\r\n`; }
-                if (rd.explanation?.class) c += `Explanation,class,${e(Array.isArray(rd.explanation.class) ? rd.explanation.class.join('; ') : rd.explanation.class)}\r\n`;
-                if (rd.explanation?.abnormality_summary) c += `Explanation,abnormality_summary,${e(rd.explanation.abnormality_summary)}\r\n`;
-                
-                // === MODIFICATION: ADD NEW DELTA KEYS ===
-                if (Array.isArray(rd.top_malignant_delta)) rd.top_malignant_delta.forEach(([n, v]) => c += `Top Malignant Delta,${e(PRETTY_NAMES[n] || n)},${e(v)}\r\n`);
-                if (Array.isArray(rd.top_benign_delta)) rd.top_benign_delta.forEach(([n, v]) => c += `Top Benign Delta,${e(PRETTY_NAMES[n] || n)},${e(v)}\r\n`);
-                if (Array.isArray(rd.all_detected_delta)) rd.all_detected_delta.forEach(([n, v]) => c += `All Detected Delta,${e(PRETTY_NAMES[n] || n)},${e(v)}\r\n`);
-                // === END MODIFICATION ===
-                
-                // MODIFICATION: Filter excluded z-scores from CSV
-                const zscoresToExclude = ["crop_x1", "crop_y1", "crop_ok"]; // Allow x0, y0
-                if (rd.zscores) Object.keys(rd.zscores).sort()
-                    .filter(k => !zscoresToExclude.includes(k)) // <-- MODIFIED FILTER
-                    .forEach(k => c += `Z-Score,${e(PRETTY_NAMES[k] || k)},${e(rd.zscores[k])}\r\n`);
-
-                const b = new Blob([c], { type: 'text/csv;charset=utf-8;' }); const l = document.createElement("a");
-                if (l.download !== undefined) { const u = URL.createObjectURL(b); const t = new Date().toISOString().replace(/:/g, '-').slice(0, 19); l.setAttribute("href", u); l.setAttribute("download", `prediction_results_${t}.csv`); l.style.visibility = 'hidden'; document.body.appendChild(l); l.click(); document.body.removeChild(l); }
-            }
-            function buildCSVPreviewHTML(rd, l = 35) {
-                const rs = [];
-                rs.push(["Prediction", "final_prediction", String(rd.final_prediction ?? "—")]);
-                if (rd.probabilities) Object.entries(rd.probabilities).forEach(([k, v]) => rs.push(["Probability", k, String(v ?? "—")]));
-
-                // --- (MODIFIED) Add new fields for CSV Preview ---
-                const lesionSubtype = rd.lesion_subtype;
-                let lesionText = "N/A";
-                if (lesionSubtype && lesionSubtype.category) {
-                    lesionText = lesionSubtype.category;
-                    const details = [];
-                    if (lesionSubtype.details.shape) details.push(lesionSubtype.details.shape);
-                    if (lesionSubtype.details.margin) details.push(lesionSubtype.details.margin);
-                    if (lesionSubtype.details.type) details.push(lesionSubtype.details.type);
-                    if (lesionSubtype.details.distribution) details.push(lesionSubtype.details.distribution);
-                    if (details.length > 0) {
-                        lesionText += ` (${details.join(', ')})`;
-                    }
-                } else if (rd.abnormality_type) {
-                    lesionText = rd.abnormality_type;
-                }
-                rs.push(["Summary", "lesion_subtype", lesionText]);
-                rs.push(["Summary", "total_features_detected", String(rd["total number of features detected"] ?? "—")]);
-                rs.push(["Summary", "total_towards_malignant", String(rd["total number of \"towards malignant\""] ?? "—")]);
-                rs.push(["Summary", "total_towards_benign", String(rd["total number of \"towards benign\""] ?? "—")]);
-                rs.push(["Summary", "malignant_features", String(rd["name of malignant features"] ?? "—")]);
-                rs.push(["Summary", "benign_features", String(rd["name of benign features"] ?? "—")]);
-                rs.push(["Summary", "all_detected_features", String(rd["name of all detected features"] ?? "—")]);
-                // --- (END MODIFIED) ---
-
-                rs.push(["Decision", "distance_to_benign", String(rd.distance_to_benign ?? "—")]);
-                rs.push(["Decision", "distance_to_malignant", String(rd.distance_to_malignant ?? "—")]);
-                rs.push(["Decision", "tau", String(rd.tau ?? "—")]);
-                rs.push(["Decision", "ratio_decision_rule", String(rd.ratio_decision ?? "—")]);
-                rs.push(["Decision", "distance_ratio", String(rd.distance_ratio ?? "—")]);
-                rs.push(["Decision", "malignant_margin_x", String(rd.malignant_margin_x ?? "—")]);
-                rs.push(["Decision", "malignant_margin_pct", String(rd.malignant_margin_pct ?? "—")]);
-                rs.push(["Decision", "benign_margin_x", String(rd.benign_margin_x ?? "—")]);
-                rs.push(["Decision", "benign_margin_pct", String(rd.benign_margin_pct ?? "—")]);
-                rs.push(["Decision", "decision_verdict", String(rd.decision_verdict ?? "—")]);
-                rs.push(["Abnormality", "type", String(rd.abnormality_type ?? "—")]);
-                if (rd.abnormality_scores) Object.entries(rd.abnormality_scores).forEach(([k, v]) => rs.push(["Abnormality Score", PRETTY_NAMES[k] || k, String(v ?? "—")]));
-                if (rd.background_tissue) { rs.push(["Background", "code", String(rd.background_tissue.code ?? "—")]); rs.push(["Background", "text", String(rd.background_tissue.text ?? "—")]); rs.push(["Background", "explanation", String(rd.background_tissue.explain ?? "—")]); }
-                if (rd.explanation?.class) rs.push(["Explanation", "class", String(Array.isArray(rd.explanation.class) ? rd.explanation.class.join("; ") : rd.explanation.class)]);
-                if (rd.explanation?.abnormality_summary) rs.push(["Explanation", "abnormality_summary", String(rd.explanation.abnormality_summary)]);
-                
-                // === MODIFICATION: ADD NEW DELTA KEYS ===
-                if (Array.isArray(rd.top_malignant_delta)) rd.top_malignant_delta.forEach(([n, v]) => rs.push(["Top Malignant Delta", PRETTY_NAMES[n] || n, String(v ?? "—")]));
-                if (Array.isArray(rd.top_benign_delta)) rd.top_benign_delta.forEach(([n, v]) => rs.push(["Top Benign Delta", PRETTY_NAMES[n] || n, String(v ?? "—")]));
-                if (Array.isArray(rd.all_detected_delta)) rd.all_detected_delta.forEach(([n, v]) => rs.push(["All Detected Delta", PRETTY_NAMES[n] || n, String(v ?? "—")]));
-                // === END MODIFICATION ===
-                
-                // MODIFICATION: Filter excluded z-scores from CSV Preview
-                const zscoresToExclude = ["crop_x1", "crop_y1", "crop_ok"]; // Allow x0, y0
-                if (rd.zscores) Object.keys(rd.zscores).sort()
-                    .filter(k => !zscoresToExclude.includes(k)) // <-- MODIFIED FILTER
-                    .forEach(k => rs.push(["Z-Score", PRETTY_NAMES[k] || k, String(rd.zscores[k] ?? "—")]));
-
-                const lim = rs.slice(0, l); let t = '<div class="table-wrapper-scroll"><table class="data-table"><thead><tr><th>Category</th><th>Parameter</th><th>Value</th></tr></thead><tbody>'; lim.forEach(r => t += `<tr><td>${escapeHTML(r[0])}</td><td>${escapeHTML(r[1])}</td><td>${escapeHTML(r[2])}</td></tr>`); t += '</tbody></table></div>'; t += `<div class="modal__actions" style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.75rem;"><button type="button" class="btn" id="csv-download-confirm">Download All ${rs.length} Rows</button><button type="button" class="btn btn-secondary" id="csv-preview-close">Close</button></div><p class="file-meta" style="margin-top:.5rem; text-align:right;">Showing first ${lim.length} of ${rs.length} rows.</p>`; return t;
-            }
-            function openCSVPreview(rd) { const h = buildCSVPreviewHTML(rd); showContentInModal('CSV Preview', h); const dl = document.getElementById('csv-download-confirm'); const cl = document.getElementById('csv-preview-close'); if (dl) dl.addEventListener('click', () => { downloadCSV(rd); closeCardModal(); }); if (cl) cl.addEventListener('click', closeCardModal); }
-
-
-            // --- Initialization ---
-            renderHistory(); // NEW: Render history on load
-            const initialPredictData = window.__PREDICT__;
-            const stored = loadState();
-            let initialImageSrc = null;
-
-            // Determine initial state (PHP load > LocalStorage > Default)
-            if (initialPredictData?.result) { // Result from PHP
-                resultsPlaceholder.style.display = 'none';
-                displayResults(initialPredictData.result);
-                clearBtn.style.display = 'inline-flex';
-                initialImageSrc = window.__UPLOADED_IMAGE__;
-            } else if (stored?.result) { // Result from localStorage
-                resultsPlaceholder.style.display = 'none';
-                displayResults(stored.result);
-                clearBtn.style.display = 'inline-flex';
-                initialImageSrc = stored.imagePath || stored.previewDataUrl;
-                window.__PREDICT__ = { ok: true, result: stored.result, image: stored.imagePath };
-            } else { // Default initial state
-                resultsPlaceholder.style.display = 'block';
-                resultsContainer.style.display = 'none';
-                skeletonLoader.style.display = 'none';
-            }
-
-            // Display initial image if available
-            if (initialImageSrc) {
-                const img = new Image();
-                img.onload = () => {
-                    const rC = document.createElement('canvas'); rC.width = img.width; rC.height = img.height; rC.getContext('2d').drawImage(img, 0, 0);
-                    const dU = rC.toDataURL(); previewWrapper.dataset.fullImage = dU;
-                    const mW = previewWrapper.clientWidth || 900; const mH = 400; const sc = scaleCanvasToFit(rC, mW, mH);
-                    displayCanvas(sc, previewWrapper);
-                    const nE = document.getElementById('image-filename'); if (nE) { nE.textContent = (initialPredictData ? window.__UPLOADED_IMAGE__?.split('/').pop() : stored?.filename) || 'image'; nE.style.display = 'block'; }
-                    submitBtn.disabled = false;
-                    uploadArea.style.display = 'none';
-                };
-                img.onerror = () => { console.warn("Could not load initial image:", initialImageSrc); clearState(); };
-                img.src = initialImageSrc;
-            }
-
+<script>
+ document.addEventListener('DOMContentLoaded', () => {
+  // === Safe DOM getters ===
+  const $ = id => document.getElementById(id);
+  const qs = sel => document.querySelector(sel);
+  const qsa = sel => Array.from(document.querySelectorAll(sel));
+
+  // === Element refs (guarded) ===
+  const fileInput = $('file-input');
+  const submitBtn = $('submit-btn');
+  const clearBtn = $('clear-btn');
+  const form = $('image-upload-form');
+  const spinner = $('spinner');
+  const btnText = $('btn-text');
+  const skeletonLoader = $('skeleton-loader');
+  const uploadArea = $('upload-area');
+  const resultsContainer = $('results-container');
+  const resultsGrid = $('results-grid');
+  const imageModalOverlay = $('image-modal-overlay');
+  const cardModalOverlay = $('card-modal-overlay');
+  const cardModalContent = $('card-modal-content');
+  const cardModalTitle = cardModalContent ? cardModalContent.querySelector('.modal-title') : null;
+  const cardModalBody = cardModalContent ? cardModalContent.querySelector('.modal-body') : null;
+  const closeCardModalBtn = cardModalContent ? cardModalContent.querySelector('.close-modal-btn') : null;
+  const errorContainer = $('error-container');
+  const previewWrapper = $('image-preview-wrapper');
+  const resultsPlaceholder = $('results-placeholder');
+
+  // History
+  const historyCard = $('history-card');
+  const historyList = $('history-list');
+  const historyPlaceholder = $('history-placeholder');
+  const clearHistoryBtn = $('clear-history-btn');
+
+  // Sticky
+  const toggleStickyBtn = $('toggle-sticky-btn');
+  const leftColumn = document.querySelector('.left-column');
+  const stickyBtnText = $('sticky-btn-text');
+
+  // Other optional nodes (may be missing)
+  const allFeaturesTableBodyId = 'all-features-body';
+  const fsummaryMalBodyId = 'fsummary-malignant-body';
+  const fsummaryBenBodyId = 'fsummary-benign-body';
+
+  // === State ===
+  let activeCharts = {};
+  let currentMaximizedChartId = null;
+  const PRETTY_NAMES = window.__PRETTY_NAMES__ || {};
+
+  // === Local storage keys ===
+  const STORAGE_KEY = 'woa_result_state_v3';
+  const HISTORY_KEY = 'woa_history_v1';
+  const STICKY_KEY = 'woa_sticky_pref';
+
+  // === Helper utilities ===
+  function safe(fn) {
+    try { return fn(); } catch (e) { console.warn('safe helper caught', e); return null; }
+  }
+
+  function escapeHTML(s) {
+    return String(s ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
+  function showError(msg) {
+    if (!errorContainer) return;
+    errorContainer.innerHTML = `<div class="step-card error-card animate-slide-up"><strong>Error:</strong> ${msg}</div>`;
+  }
+
+  // LocalStorage helpers
+  function loadState() {
+    try {
+      const r = localStorage.getItem(STORAGE_KEY);
+      return r ? JSON.parse(r) : null;
+    } catch (e) { return null; }
+  }
+  function saveState(p) {
+    try {
+      const pr = loadState() || {};
+      let n = Object.assign({}, pr, p, { savedAt: Date.now() });
+      let pl = JSON.stringify(n);
+      // Avoid huge localStorage
+      if (pl.length > 4500000) {
+        delete n.previewDataUrl;
+        pl = JSON.stringify(n);
+      }
+      localStorage.setItem(STORAGE_KEY, pl);
+    } catch (e) {
+      console.warn('State save failed:', e);
+    }
+  }
+  function clearState() {
+    try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  }
+
+  // History storage
+  function loadHistory() {
+    try {
+      const h = localStorage.getItem(HISTORY_KEY);
+      return h ? JSON.parse(h) : [];
+    } catch (e) { return []; }
+  }
+  function saveHistory(history) {
+    try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch (e) { console.warn('History save failed:', e); }
+  }
+  function addResultToHistory(payload) {
+    if (!payload || !payload.result) return;
+    try {
+      const history = loadHistory();
+      const item = {
+        id: new Date().toISOString() + '_' + Math.random().toString(36).slice(2, 9),
+        savedAt: Date.now(),
+        result: payload.result,
+        imagePath: payload.preview || payload.image || null,
+        filename: fileInput?.files?.[0]?.name || null
+      };
+      history.unshift(item);
+      if (history.length > 20) history.pop();
+      saveHistory(history);
+      renderHistory();
+    } catch (e) { console.error('addResultToHistory err', e); }
+  }
+  function renderHistory() {
+    if (!historyList) return;
+    const history = loadHistory();
+    if (!history || history.length === 0) {
+      historyList.innerHTML = '';
+      if (historyPlaceholder) historyPlaceholder.style.display = 'block';
+      if (clearHistoryBtn) clearHistoryBtn.style.display = 'none';
+      return;
+    }
+    if (historyPlaceholder) historyPlaceholder.style.display = 'none';
+    if (clearHistoryBtn) clearHistoryBtn.style.display = 'inline-flex';
+
+    historyList.innerHTML = history.map(item => {
+      const pred = item.result?.final_prediction || item.result?.prediction || 'N/A';
+      const predClass = (String(pred || '').toLowerCase().startsWith('mal')) ? 'history-item-malignant' : 'history-item-benign';
+      const date = new Date(item.savedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+      return `<div class="history-item" data-history-id="${escapeHTML(item.id)}">
+                <div class="history-item-left">
+                  <span class="history-item-filename">${escapeHTML(item.filename || 'uploaded')}</span>
+                  <span class="history-item-date">${escapeHTML(date)}</span>
+                </div>
+                <div class="history-item-right">
+                  <span class="pill ${predClass}">${escapeHTML(String(pred))}</span>
+                </div>
+              </div>`;
+    }).join('');
+  }
+
+  // === Canvas & preview utilities ===
+  function displayCanvas(c, container) {
+    if (!container) return;
+    const existing = container.querySelector('canvas');
+    if (existing) existing.remove();
+    container.prepend(c);
+    container.style.display = 'flex';
+  }
+
+  function scaleCanvasToFit(sC, mW, mH) {
+    const w = sC.width, h = sC.height;
+    const sc = Math.min(mW / w, mH / h, 1);
+    const o = document.createElement('canvas');
+    o.width = Math.round(w * sc);
+    o.height = Math.round(h * sc);
+    o.getContext('2d').drawImage(sC, 0, 0, o.width, o.height);
+    return o;
+  }
+
+  // Render normal image file to canvas (not DICOM)
+  function renderToCanvas(file) {
+    return new Promise((res, rej) => {
+      const isTiff = file.type === 'image/tiff' || file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff');
+      const rdr = new FileReader();
+      if (isTiff && window.Tiff) {
+        rdr.onload = e => {
+          try {
+            Tiff.initialize({ TOTAL_MEMORY: 16777216 * 10 });
+            const tiff = new Tiff({ buffer: e.target.result });
+            res(tiff.toCanvas());
+          } catch (err) { rej(err); }
+        };
+        rdr.onerror = rej;
+        rdr.readAsArrayBuffer(file);
+      } else {
+        rdr.onload = e => {
+          const img = new Image();
+          img.onload = () => {
+            const c = document.createElement('canvas');
+            c.width = img.width; c.height = img.height;
+            c.getContext('2d').drawImage(img, 0, 0);
+            res(c);
+          };
+          img.onerror = rej;
+          img.src = e.target.result;
+        };
+        rdr.onerror = rej;
+        rdr.readAsDataURL(file);
+      }
+    });
+  }
+
+  // === Chart helpers (uses Chart.js if present) ===
+  function destroyChartIfExists(id) {
+    if (activeCharts[id]) {
+      try { activeCharts[id].destroy(); } catch (e) {}
+      delete activeCharts[id];
+    }
+  }
+
+  function renderHorizontalBarChart(canvasId, featuresData, barColor, valueLabel = 'Value') {
+    const cv = document.getElementById(canvasId);
+    if (!cv || !window.Chart) return;
+    destroyChartIfExists(canvasId);
+    if (!featuresData || featuresData.length === 0) {
+      const ctx = cv.getContext('2d'); if (!ctx) return;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dark') || '#333';
+      ctx.textAlign = 'center';
+      ctx.fillText('No features found.', cv.width / 2, cv.height / 2);
+      cv.parentElement && (cv.parentElement.style.height = '100px');
+      return;
+    }
+    const labels = featuresData.map(f => PRETTY_NAMES[f[0]] || f[0]);
+    const data = featuresData.map(f => Number(f[1]));
+    const bgColor = barColor || 'rgba(99, 179, 237, 0.7)';
+    const borderColor = bgColor.replace(/0\.7|0\.8/, '1');
+    const chartHeight = Math.max(150, featuresData.length * 20);
+    cv.parentElement && (cv.parentElement.style.height = `${chartHeight}px`);
+
+    activeCharts[canvasId] = new Chart(cv.getContext('2d'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label: valueLabel, data, backgroundColor: bgColor, borderColor, borderWidth: 1, borderRadius: 4 }] },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: {
+          x: { grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border-color') || '#eee' }, ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-dark') || '#333', callback: v => Number(v).toFixed(2) } },
+          y: { grid: { display: false }, ticks: { color: getComputedStyle(document.documentElement).getPropertyValue('--text-dark') || '#333' } }
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: ctx => `${valueLabel}: ${Number(ctx.parsed.x).toFixed(6)}` } }
+        }
+      }
+    });
+  }
+
+  function renderAllFeaturesChart(canvasId, zDataSorted) {
+    const cv = document.getElementById(canvasId);
+    if (!cv || !window.Chart) return;
+    destroyChartIfExists(canvasId);
+    if (!zDataSorted || zDataSorted.length === 0) {
+      const ctx = cv.getContext('2d'); if (!ctx) return;
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text-dark') || '#333';
+      ctx.textAlign = 'center';
+      ctx.fillText('No features found.', cv.width / 2, cv.height / 2);
+      cv.parentElement && (cv.parentElement.style.height = '100px');
+      return;
+    }
+
+    const labels = zDataSorted.map(d => d.label);
+    const data = zDataSorted.map(d => Number(d.z));
+    const colors = zDataSorted.map(d => Number(d.z) >= 0 ? (getComputedStyle(document.documentElement).getPropertyValue('--pastel-benign') || 'rgba(132,204,145,0.7)') : (getComputedStyle(document.documentElement).getPropertyValue('--pastel-malignant') || 'rgba(252,165,165,0.7)'));
+    const chartHeight = Math.max(400, zDataSorted.length * 18);
+    cv.parentElement && (cv.parentElement.style.height = `${chartHeight}px`);
+    const tableScroll = $('all-features-table-scroll'); if (tableScroll) tableScroll.style.maxHeight = `${chartHeight}px`;
+
+    activeCharts[canvasId] = new Chart(cv.getContext('2d'), {
+      type: 'bar',
+      data: { labels, datasets: [{ label: 'Z-Score', data, backgroundColor: colors, borderWidth: 0, borderRadius: 4 }] },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        scales: { x: { position: 'top', ticks: { callback: v => Number(v).toFixed(1) }, grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border-color') || '#eee' } }, y: { ticks: { font: { size: 9 } }, grid: { display: false } } },
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `Contribution: ${Number(ctx.parsed.x).toFixed(3)}` } } }
+      }
+    });
+  }
+
+  // === Tables (color-coded) ===
+  function renderColorCodedTable(tbodyId, featuresData, valueType = 'Value') {
+    const tableBody = document.getElementById(tbodyId);
+    // Silently return if table body is not present (avoid console warnings)
+    if (!tableBody) return;
+    if (!Array.isArray(featuresData) || featuresData.length === 0) {
+      tableBody.innerHTML = '<tr><td colspan="2">No features found.</td></tr>';
+      return;
+    }
+    const rows = featuresData.map(([name, value]) => {
+      const prettyName = PRETTY_NAMES[name] || name;
+      const val = Number(value);
+      const colorClass = val < 0 ? 'row-malignant' : 'row-benign';
+      const formattedValue = Number.isFinite(val) ? (valueType === 'Z-Score' ? val.toFixed(4) : val.toFixed(6)) : String(value);
+      return `<tr class="${colorClass}"><td>${escapeHTML(prettyName)} <span class="subtle-name">(${escapeHTML(name)})</span></td><td class="mono"><strong>${escapeHTML(formattedValue)}</strong></td></tr>`;
+    }).join('');
+    tableBody.innerHTML = rows;
+  }
+
+  // === CSV helpers (keeps previous CSV behavior) ===
+  function downloadCSV(rd) {
+    let c = "Category,Parameter,Value\r\n";
+    const e = s => { if (s == null) return ''; let r = String(s); if (r.includes(',') || r.includes('"') || r.includes('\n')) r = '"' + r.replace(/"/g, '""') + '"'; return r; };
+
+    c += `Prediction,final_prediction,${e(rd.final_prediction ?? rd.prediction)}\r\n`;
+    if (rd.probabilities) Object.entries(rd.probabilities).forEach(([k, v]) => c += `Probability,${e(k)},${e(v)}\r\n`);
+
+    c += `Summary,lesion_subtype,${e(rd.lesion_subtype?.category ? `${rd.lesion_subtype.category} (${Object.values(rd.lesion_subtype.details || {}).join(', ')})` : rd.abnormality_type ?? '')}\r\n`;
+    c += `Summary,total_features_detected,${e(rd["total number of features detected"])}\r\n`;
+    c += `Summary,total_towards_malignant,${e(rd["total number of \"towards malignant\""])}\r\n`;
+    c += `Summary,total_towards_benign,${e(rd["total number of \"towards benign\""])}\r\n`;
+    c += `Summary,malignant_features,${e(rd["name of malignant features"])}\r\n`;
+    c += `Summary,benign_features,${e(rd["name of benign features"])}\r\n`;
+    c += `Summary,all_detected_features,${e(rd["name of all detected features"])}\r\n`;
+
+    c += `Decision,distance_to_benign,${e(rd.distance_to_benign)}\r\n`;
+    c += `Decision,distance_to_malignant,${e(rd.distance_to_malignant)}\r\n`;
+    c += `Decision,tau,${e(rd.tau)}\r\n`;
+    c += `Decision,ratio_decision_rule,${e(rd.ratio_decision)}\r\n`;
+    c += `Decision,distance_ratio,${e(rd.distance_ratio ?? '')}\r\n`;
+    if (rd.abnormality_scores) Object.entries(rd.abnormality_scores).forEach(([k, v]) => c += `Abnormality Score,${e(PRETTY_NAMES[k] || k)},${e(v)}\r\n`);
+    if (rd.background_tissue) {
+      c += `Background,code,${e(rd.background_tissue.code)}\r\n`;
+      c += `Background,text,${e(rd.background_tissue.text)}\r\n`;
+      c += `Background,explain,${e(rd.background_tissue.explain)}\r\n`;
+    }
+    if (rd.explanation?.class) c += `Explanation,class,${e(Array.isArray(rd.explanation.class) ? rd.explanation.class.join('; ') : rd.explanation.class)}\r\n`;
+    if (rd.explanation?.abnormality_summary) c += `Explanation,abnormality_summary,${e(rd.explanation.abnormality_summary)}\r\n`;
+
+    if (Array.isArray(rd.top_malignant_delta)) rd.top_malignant_delta.forEach(([n, v]) => c += `Top Malignant Delta,${e(PRETTY_NAMES[n] || n)},${e(v)}\r\n`);
+    if (Array.isArray(rd.top_benign_delta)) rd.top_benign_delta.forEach(([n, v]) => c += `Top Benign Delta,${e(PRETTY_NAMES[n] || n)},${e(v)}\r\n`);
+    if (Array.isArray(rd.all_detected_delta)) rd.all_detected_delta.forEach(([n, v]) => c += `All Detected Delta,${e(PRETTY_NAMES[n] || n)},${e(v)}\r\n`);
+
+    const zscoresToExclude = ["crop_x1", "crop_y1", "crop_ok"];
+    if (rd.zscores) Object.keys(rd.zscores || {}).sort().filter(k => !zscoresToExclude.includes(k)).forEach(k => c += `Z-Score,${e(PRETTY_NAMES[k] || k)},${e(rd.zscores[k])}\r\n`);
+
+    const blob = new Blob([c], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    if (a.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      const t = new Date().toISOString().replace(/:/g, '-').slice(0, 19);
+      a.setAttribute('href', url);
+      a.setAttribute('download', `prediction_results_${t}.csv`);
+      a.style.visibility = 'hidden';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+  }
+
+  // Build CSV preview HTML (mini table)
+  function buildCSVPreviewHTML(rd, l = 35) {
+    const rs = [];
+    rs.push(["Prediction", "final_prediction", String(rd.final_prediction ?? rd.prediction ?? "—")]);
+    if (rd.probabilities) Object.entries(rd.probabilities).forEach(([k, v]) => rs.push(["Probability", k, String(v ?? "—")]));
+    const lesionSubtype = rd.lesion_subtype;
+    let lesionText = "N/A";
+    if (lesionSubtype && lesionSubtype.category) {
+      lesionText = lesionSubtype.category;
+      const details = [];
+      if (lesionSubtype.details?.shape) details.push(lesionSubtype.details.shape);
+      if (lesionSubtype.details?.margin) details.push(lesionSubtype.details.margin);
+      if (lesionSubtype.details?.type) details.push(lesionSubtype.details.type);
+      if (lesionSubtype.details?.distribution) details.push(lesionSubtype.details.distribution);
+      if (details.length) lesionText += ` (${details.join(', ')})`;
+    } else if (rd.abnormality_type) lesionText = rd.abnormality_type;
+    rs.push(["Summary", "lesion_subtype", lesionText]);
+    rs.push(["Summary", "total_features_detected", String(rd["total number of features detected"] ?? "—")]);
+    rs.push(["Summary", "total_towards_malignant", String(rd["total number of \"towards malignant\""] ?? "—")]);
+    rs.push(["Summary", "total_towards_benign", String(rd["total number of \"towards benign\""] ?? "—")]);
+    rs.push(["Summary", "malignant_features", String(rd["name of malignant features"] ?? "—")]);
+    rs.push(["Summary", "benign_features", String(rd["name of benign features"] ?? "—")]);
+    rs.push(["Summary", "all_detected_features", String(rd["name of all detected features"] ?? "—")]);
+
+    rs.push(["Decision", "distance_to_benign", String(rd.distance_to_benign ?? "—")]);
+    rs.push(["Decision", "distance_to_malignant", String(rd.distance_to_malignant ?? "—")]);
+    rs.push(["Decision", "tau", String(rd.tau ?? "—")]);
+    rs.push(["Decision", "ratio_decision_rule", String(rd.ratio_decision ?? "—")]);
+    rs.push(["Decision", "distance_ratio", String(rd.distance_ratio ?? "—")]);
+
+    if (rd.abnormality_scores) Object.entries(rd.abnormality_scores).forEach(([k, v]) => rs.push(["Abnormality Score", PRETTY_NAMES[k] || k, String(v ?? "—")]));
+    if (rd.background_tissue) { rs.push(["Background", "code", String(rd.background_tissue.code ?? "—")]); rs.push(["Background", "text", String(rd.background_tissue.text ?? "—")]); rs.push(["Background", "explain", String(rd.background_tissue.explain ?? "—")]); }
+    if (rd.explanation?.class) rs.push(["Explanation", "class", String(Array.isArray(rd.explanation.class) ? rd.explanation.class.join("; ") : rd.explanation.class)]);
+    if (rd.explanation?.abnormality_summary) rs.push(["Explanation", "abnormality_summary", String(rd.explanation.abnormality_summary)]);
+
+    if (Array.isArray(rd.top_malignant_delta)) rd.top_malignant_delta.forEach(([n, v]) => rs.push(["Top Malignant Delta", PRETTY_NAMES[n] || n, String(v ?? "—")]));
+    if (Array.isArray(rd.top_benign_delta)) rd.top_benign_delta.forEach(([n, v]) => rs.push(["Top Benign Delta", PRETTY_NAMES[n] || n, String(v ?? "—")]));
+    if (Array.isArray(rd.all_detected_delta)) rd.all_detected_delta.forEach(([n, v]) => rs.push(["All Detected Delta", PRETTY_NAMES[n] || n, String(v ?? "—")]));
+
+    const zscoresToExclude = ["crop_x1", "crop_y1", "crop_ok"];
+    if (rd.zscores) Object.keys(rd.zscores || {}).sort().filter(k => !zscoresToExclude.includes(k)).forEach(k => rs.push(["Z-Score", PRETTY_NAMES[k] || k, String(rd.zscores[k] ?? "—")]));
+
+    const lim = rs.slice(0, l);
+    let t = '<div class="table-wrapper-scroll"><table class="data-table"><thead><tr><th>Category</th><th>Parameter</th><th>Value</th></tr></thead><tbody>';
+    lim.forEach(r => t += `<tr><td>${escapeHTML(r[0])}</td><td>${escapeHTML(r[1])}</td><td>${escapeHTML(r[2])}</td></tr>`);
+    t += '</tbody></table></div>';
+    t += `<div class="modal__actions" style="display:flex;gap:.5rem;justify-content:flex-end;margin-top:.75rem;"><button type="button" class="btn" id="csv-download-confirm">Download All ${rs.length} Rows</button><button type="button" class="btn btn-secondary" id="csv-preview-close">Close</button></div><p class="file-meta" style="margin-top:.5rem; text-align:right;">Showing first ${lim.length} of ${rs.length} rows.</p>`;
+    return t;
+  }
+
+  function openCSVPreview(rd) {
+    const html = buildCSVPreviewHTML(rd);
+    showContentInModal('CSV Preview', html);
+    const dl = document.getElementById('csv-download-confirm');
+    const cl = document.getElementById('csv-preview-close');
+    if (dl) dl.addEventListener('click', () => { downloadCSV(rd); closeCardModal(); });
+    if (cl) cl.addEventListener('click', closeCardModal);
+  }
+
+  // === Modal & UI helpers ===
+  function closeCardModal() {
+    if (cardModalOverlay) cardModalOverlay.classList.remove('visible');
+    document.body.style.overflow = '';
+    if (cardModalBody) cardModalBody.innerHTML = '';
+    // Destroy modal charts
+    Object.keys(activeCharts).forEach(k => { if (k.startsWith('modal_')) { try { activeCharts[k].destroy(); } catch (e) {} delete activeCharts[k]; }});
+  }
+
+  function showContentInModal(title, contentHtml, cardId = null) {
+    if (!cardModalOverlay || !cardModalBody || !cardModalTitle) {
+      // fallback: simple alert
+      const w = window.open('', '_blank', 'noopener');
+      w.document.write(`<h3>${escapeHTML(title)}</h3>${contentHtml}`);
+      return;
+    }
+    cardModalTitle.textContent = title;
+    cardModalBody.innerHTML = contentHtml;
+    cardModalOverlay.classList.add('visible');
+    document.body.style.overflow = 'hidden';
+
+    // small delay to ensure DOM nodes are present
+    requestAnimationFrame(() => {
+      // If cardId requests chart rendering, clone main chart configs where possible
+      if (!window.__PREDICT__?.result) return;
+      const ids = [];
+      if (cardId === 'all-features-charts-card') ids.push('all-features-chart');
+      if (cardId === 'feature-summary-card-content') ids.push('fsummary-malignant-chart', 'fsummary-benign-chart');
+      if (cardId === 'explanation-card-content') ids.push('abnormality-chart');
+      ids.forEach(id => {
+        const canvas = cardModalBody.querySelector(`#${id}`);
+        if (!canvas) return;
+        // Attempt to clone from existing activeCharts
+        const original = activeCharts[id];
+        if (original && canvas.getContext) {
+          try {
+            // Chart.js accepts config clone
+            const ctx = canvas.getContext('2d');
+            const cfg = JSON.parse(JSON.stringify(original.config || original._config || {}));
+            activeCharts['modal_' + id] = new Chart(ctx, cfg);
+          } catch (e) {
+            console.warn('Could not clone chart to modal for', id, e);
+          }
+        }
+      });
+    });
+  }
+
+  // Image modal
+  function showImageInModal(dataUrl) {
+    if (!imageModalOverlay) return;
+    imageModalOverlay.innerHTML = '';
+    const i = new Image();
+    i.src = dataUrl;
+    i.style.maxWidth = '90vw';
+    i.style.maxHeight = '90vh';
+    i.style.borderRadius = '12px';
+    imageModalOverlay.appendChild(i);
+    imageModalOverlay.classList.add('visible');
+  }
+
+  // === Core: displayResults ===
+  function displayResults(resultData, payload) {
+    if (!resultsContainer) return;
+    resultsContainer.style.display = 'block';
+    if (resultsPlaceholder) resultsPlaceholder.style.display = 'none';
+
+    // Prediction label
+    const predEl = qs('#prediction-card-content [data-field="final_prediction"]');
+    const indEl = qs('#prediction-card-content .prediction-indicator');
+    const pred = resultData.final_prediction || resultData.prediction || '—';
+    const predClass = String(pred || '').toLowerCase();
+    const accentSuccess = getComputedStyle(document.documentElement).getPropertyValue('--accent-success') || 'rgba(46,204,113,0.7)';
+    const accentWarning = getComputedStyle(document.documentElement).getPropertyValue('--accent-warning') || 'rgba(231,76,60,0.7)';
+    const predColor = pred === 'Malignant' || predClass.includes('malign') ? accentWarning : accentSuccess;
+
+    if (predEl) { predEl.textContent = pred; predEl.style.color = predColor; const pC = predEl.closest('.prediction-card'); if (pC) pC.className = `step-card prediction-card animate-slide-up prediction-${predClass.replace(/\s+/g,'-')}`; }
+    if (indEl) {
+      const bSVG = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="${accentSuccess}"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>`;
+      const mSVG = `<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="${accentWarning}"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>`;
+      indEl.innerHTML = (String(pred || '').toLowerCase().startsWith('mal') ? mSVG : bSVG);
+    }
+// ------------------------------------------------------------
+// PATCH: Convert top_feature_contributions → old arrays
+// ------------------------------------------------------------
+
+// Extract unified list from backend
+const TFC = Array.isArray(resultData.top_feature_contributions)
+  ? resultData.top_feature_contributions
+  : [];
+
+// Convert to legacy [name, value] pairs
+const derived_all_detected_delta = TFC.map(row => {
+  const name = row.feature || row[0];
+  const val  = Number(row.contribution ?? row[1] ?? 0);
+  return [name, val];
+});
+
+// Build malignant feature list
+const derived_top_malignant_delta = TFC
+  .filter(r => {
+    const t = String(r.towards || '').toLowerCase();
+    if (t.includes('mal')) return true;
+    return Number(r.contribution) < 0;
+  })
+  .map(r => [ r.feature, Number(r.contribution) ])
+  .sort((a,b) => a[1] - b[1])   // most negative first
+  .slice(0, 30);
+
+// Build benign feature list
+const derived_top_benign_delta = TFC
+  .filter(r => {
+    const t = String(r.towards || '').toLowerCase();
+    if (t.includes('ben')) return true;
+    return Number(r.contribution) >= 0;
+  })
+  .map(r => [ r.feature, Number(r.contribution) ])
+  .sort((a,b) => b[1] - a[1])   // largest positive first
+  .slice(0, 30);
+
+// Prefer backend keys if present, otherwise use derived ones
+const allDetectedData = Array.isArray(resultData.all_detected_delta)
+  ? resultData.all_detected_delta
+  : derived_all_detected_delta;
+
+const topMalData = Array.isArray(resultData.top_malignant_delta)
+  ? resultData.top_malignant_delta
+  : derived_top_malignant_delta;
+
+const topBenData = Array.isArray(resultData.top_benign_delta)
+  ? resultData.top_benign_delta
+  : derived_top_benign_delta;
+
+
+// ------------------------------------------------------------
+// END PATCH
+// ------------------------------------------------------------
+
+
+    // Probabilities & distances
+    const probs = resultData.probabilities || {};
+    const benProb = Number(probs['Benign'] ?? 0);
+    const malProb = Number(probs['Malignant'] ?? 0);
+    const confVal = Math.max(benProb, malProb);
+
+    const elDB = qs('[data-field="distance_to_benign"]');
+    const elDM = qs('[data-field="distance_to_malignant"]');
+    const dB = Number(resultData.distance_to_benign);
+    const dM = Number(resultData.distance_to_malignant);
+    if (elDB) elDB.textContent = Number.isFinite(dB) ? dB.toFixed(4) : 'N/A';
+    if (elDM) elDM.textContent = Number.isFinite(dM) ? dM.toFixed(4) : 'N/A';
+
+    // Background tissue
+    const bg = resultData.background_tissue || {};
+    const code = (bg.code || '').toString().toUpperCase() || '—';
+    const badgeEl = qs('#background-card-content [data-field="background_tissue_code_badge"]');
+    const codeEl = qs('#background-card-content [data-field="background_tissue_code"]');
+    const textEl = qs('#background-card-content [data-field="background_tissue_text"]');
+    const explainEl = qs('#background-card-content [data-field="background_tissue_explain"]');
+    if (badgeEl) {
+      badgeEl.textContent = code.slice(0, 1) || '?';
+      badgeEl.className = 'birads-badge';
+      if (code.startsWith('A') || code.startsWith('T1')) badgeEl.classList.add('birads-t1');
+      else if (code.startsWith('B') || code.startsWith('T2')) badgeEl.classList.add('birads-t2');
+      else if (code.startsWith('C') || code.startsWith('T3')) badgeEl.classList.add('birads-t3');
+      else if (code.startsWith('D') || code.startsWith('T4')) badgeEl.classList.add('birads-t4');
+    }
+    if (codeEl) codeEl.textContent = code;
+    if (textEl) textEl.textContent = bg.text ?? '—';
+    if (explainEl) explainEl.textContent = bg.explain ?? '—';
+
+    // Explanations block (safe)
+    (function renderExplanations() {
+      const root = $('explain-root');
+      if (!root) return;
+      const classExplanations = (Array.isArray(resultData.explanation?.class) ? resultData.explanation.class : []).filter(e => !(e || '').includes("Mahalanobis ratio:")).map(e => escapeHTML(e));
+      const cExp = classExplanations.length ? classExplanations.join('<br>') : '—';
+      const aSumm = resultData.explanation?.abnormality_summary || '—';
+      function decorateMath(s) { if (!s) return ''; return `<span class="math-inline">${s.replace(/<=/g, '≤').replace(/->/g, '→').replace(/\*/g, '·')}</span>`; }
+      function metricsToChips(summary) {
+        if (!summary) return '';
+        const c = [];
+        const re = /([A-Za-z][A-Za-z_ ]+)\s*=\s*([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/gi;
+        let m;
+        while ((m = re.exec(summary)) !== null) c.push(`<span class="metric-chip"><span class="k">${m[1].trim()}</span><span class="v">${Number(m[2]).toFixed(2)}</span></span>`);
+        return c.join('');
+      }
+      const classHTML = (cExp && cExp !== '—') ? `<div class="explain-section"><div class="explain-body">${decorateMath(cExp || '')}</div></div>` : '';
+      const metricsHTML = metricsToChips(aSumm || '');
+      const badgesHTML = `<div class="badge-row"></div>`;
+      const summaryHTML = `<div class="explain-section"><div class="explain-title"><span class="dot"></span>Abnormality Summary</div><div class="explain-body">${metricsHTML || ''}${badgesHTML}</div></div>`;
+      root.innerHTML = classHTML + summaryHTML;
+    })();
+
+    // Abnormality scores chart
+    const abnScores = resultData.abnormality_scores || {};
+    const abnCanvas = $('abnormality-chart');
+    if (abnCanvas && window.Chart) {
+      destroyChartIfExists('abnormality-chart');
+      const abnVals = Object.values(abnScores).map(v => Number(v));
+      const abnLabels = Object.keys(abnScores).map(k => PRETTY_NAMES[k] || k);
+      activeCharts['abnormality-chart'] = new Chart(abnCanvas.getContext('2d'), {
+        type: 'bar',
+        data: { labels: abnLabels, datasets: [{ label: 'Score', data: abnVals, backgroundColor: abnVals.map((_, i) => ['rgba(99,179,237,0.7)','rgba(132,204,145,0.7)','rgba(250,202,154,0.7)'][i % 3]), borderWidth: 0, borderRadius: 4 }] },
+        options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, scales: { x: { beginAtZero: true, grid: { color: getComputedStyle(document.documentElement).getPropertyValue('--border-color') || '#eee' } }, y: { grid: { display: false } } }, plugins: { legend: { display: false } } }
+      });
+    }
+
+    // Lesion summary fields
+    const lesionSubtype = resultData.lesion_subtype;
+    let lesionText = "N/A";
+    if (lesionSubtype && lesionSubtype.category) {
+      lesionText = lesionSubtype.category;
+      const details = [];
+      if (lesionSubtype.details?.shape) details.push(lesionSubtype.details.shape);
+      if (lesionSubtype.details?.margin) details.push(lesionSubtype.details.margin);
+      if (lesionSubtype.details?.type) details.push(lesionSubtype.details.type);
+      if (lesionSubtype.details?.distribution) details.push(lesionSubtype.details.distribution);
+      if (details.length) lesionText += ` (${details.join(', ')})`;
+    } else if (resultData.abnormality_type) lesionText = resultData.abnormality_type;
+    const elLesion = qs('[data-field="lesion_subtype"]');
+    if (elLesion) elLesion.textContent = lesionText;
+    // --- Render lesion_metadata and lesion_narrative into the left UI card ---
+(function renderLesionDescription() {
+    const descRoot = document.getElementById('lesion-description-block');
+    const descContent = document.getElementById('lesion-description-content');
+    if (!descContent || !descRoot) return;
+
+    const meta = resultData.lesion_metadata || {};
+    const narrative = resultData.lesion_narrative || resultData.explanation?.abnormality_summary || '';
+    const birads = resultData.lesion_birads || (meta.assessment ?? meta.assessment_value ?? '');
+
+    let html = '';
+    // Narrative top-line (human readable)
+    if (narrative) {
+        html += `<p style="font-weight:600; margin-bottom:.5rem;">${escapeHTML(narrative)}</p>`;
+    }
+
+    // BI-RADS badge (if available)
+    if (birads) {
+        html += `<p style="margin-top:0.25rem;"><strong>Suggested BI-RADS:</strong> ${escapeHTML(birads)}</p>`;
+    }
+
+    // Raw metadata table
+    if (meta && Object.keys(meta).length) {
+        html += `<div class="table-wrapper-scroll"><table class="data-table"><tbody>`;
+        Object.entries(meta).forEach(([k,v]) => {
+            if (v === null || v === undefined || String(v).trim() === '') return;
+            html += `<tr><td style="width:40%;"><strong>${escapeHTML(k.replace(/_/g,' '))}</strong></td><td class="mono">${escapeHTML(String(v))}</td></tr>`;
         });
-    </script>
+        html += `</tbody></table></div>`;
+    } else {
+        if (!narrative) html = '<p class="file-meta">No lesion metadata available.</p>';
+    }
+
+    descContent.innerHTML = html;
+    descRoot.style.display = 'block';
+})();
+
+    const elTotalFeat = qs('[data-field="total_features"]');
+    if (elTotalFeat) elTotalFeat.textContent = resultData["total number of features detected"] ?? 'N/A';
+    const elTotalMal = qs('[data-field="total_malignant"]');
+    if (elTotalMal) elTotalMal.textContent = resultData["total number of \"towards malignant\""] ?? 'N/A';
+    const elTotalBen = qs('[data-field="total_benign"]');
+    if (elTotalBen) elTotalBen.textContent = resultData["total number of \"towards benign\""] ?? 'N/A';
+
+    // ---- Feature Summary Cards (malignant / benign) ----
+    // Guarded: only render if both DOM and array data exist
+    if (document.getElementById(fsummaryMalBodyId)) {
+    renderColorCodedTable(fsummaryMalBodyId, topMalData, 'Contribution');
+
+      // render chart if canvas exists
+      if (document.getElementById('fsummary-malignant-chart')) {
+        renderHorizontalBarChart(
+          'fsummary-malignant-chart',
+          resultData.top_malignant_delta.map(f => [f[0], f[1]]).reverse(),
+          'rgba(252,165,165,0.7)',
+          'Contribution'
+        );
+      }
+    } else {
+      // If table exists but no data, ensure friendly fallback
+      if (document.getElementById(fsummaryMalBodyId)) document.getElementById(fsummaryMalBodyId).innerHTML = '<tr><td colspan="2">No features found.</td></tr>';
+      const cv = document.getElementById('fsummary-malignant-chart');
+      if (cv && cv.getContext) {
+        const ctx = cv.getContext('2d');
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('No features found.', cv.width / 2, cv.height / 2);
+      }
+    }
+
+    if (document.getElementById(fsummaryBenBodyId)) {
+    renderColorCodedTable(fsummaryBenBodyId, topBenData, 'Contribution');
+      if (document.getElementById('fsummary-benign-chart')) {
+        renderHorizontalBarChart(
+          'fsummary-benign-chart',
+          resultData.top_benign_delta.map(f => [f[0], f[1]]).reverse(),
+          'rgba(132,204,145,0.7)',
+          'Contribution'
+        );
+      }
+    } else {
+      if (document.getElementById(fsummaryBenBodyId)) document.getElementById(fsummaryBenBodyId).innerHTML = '<tr><td colspan="2">No features found.</td></tr>';
+      const cv2 = document.getElementById('fsummary-benign-chart');
+      if (cv2 && cv2.getContext) {
+        const ctx = cv2.getContext('2d');
+        ctx.clearRect(0, 0, cv2.width, cv2.height);
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('No features found.', cv2.width / 2, cv2.height / 2);
+      }
+    }
+
+    if (document.getElementById(allFeaturesTableBodyId) && allDetectedData.length > 0) {
+      const allDataSorted = [...allDetectedData].sort((a,b) => b[1] - a[1]);
+      renderColorCodedTable(allFeaturesTableBodyId, allDataSorted, 'Contribution');
+
+      const allDataForChart = allDataSorted.map(([k,v]) => ({ key: k, label: PRETTY_NAMES[k] || k, z: v }));
+      if (document.getElementById('all-features-chart')) renderAllFeaturesChart('all-features-chart', allDataForChart);
+    } else {
+      // Table fallback
+      if (document.getElementById(allFeaturesTableBodyId)) {
+        document.getElementById(allFeaturesTableBodyId).innerHTML = '<tr><td colspan="2">No features found.</td></tr>';
+      }
+      // Chart fallback
+      const cv = document.getElementById('all-features-chart');
+      if (cv && cv.getContext) {
+        const ctx = cv.getContext('2d');
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        ctx.fillStyle = '#999';
+        ctx.textAlign = 'center';
+        ctx.fillText('No features found.', cv.width / 2, cv.height / 2);
+        cv.parentElement && (cv.parentElement.style.height = '100px');
+      }
+    }
+
+    // --- Top feature contributions table (if exists) ---
+    const topContribs = Array.isArray(resultData.top_feature_contributions) ? resultData.top_feature_contributions : [];
+    const tfcBody = $('top-feature-contrib-body');
+    if (tfcBody) {
+      tfcBody.innerHTML = topContribs.length ? topContribs.map(row => {
+        const name = row.feature || row[0];
+        const contrib = row.contribution ?? row[1];
+        const towards = row.towards || '';
+        return `<tr><td>${escapeHTML(PRETTY_NAMES[name] || name)}</td><td class="mono">${escapeHTML(Number(contrib).toFixed(6))}</td><td>${escapeHTML(towards)}</td></tr>`;
+      }).join('') : `<tr><td colspan="3">No features found.</td></tr>`;
+    }
+
+    // --- CSV & print buttons ---
+    const printBtn = $('print-btn');
+    if (printBtn) {
+      const nb = printBtn.cloneNode(true);
+      printBtn.parentNode.replaceChild(nb, printBtn);
+      nb.addEventListener('click', () => window.print());
+    }
+    const csvBtn = $('csv-btn');
+    if (csvBtn) {
+      const nb2 = csvBtn.cloneNode(true);
+      csvBtn.parentNode.replaceChild(nb2, csvBtn);
+      nb2.addEventListener('click', () => openCSVPreview(resultData));
+    }
+
+    // Rewire maximize buttons
+    if (resultsGrid) {
+      qsa('.maximize-card-btn').forEach(b => {
+        const nb = b.cloneNode(true);
+        b.parentNode.replaceChild(nb, b);
+        nb.addEventListener('click', e => {
+          const c = e.target.closest('.step-card[id]');
+          if (c?.id) {
+            const t = c.querySelector('h2')?.textContent.trim() || 'Details';
+            const ce = c.querySelector('.card-content');
+            if (ce) showContentInModal(t, ce.cloneNode(true).innerHTML, c.id);
+          }
+        });
+      });
+    }
+
+    // Save state & history
+    saveState({ result: resultData, imagePath: payload?.image || payload?.preview || null, filename: fileInput?.files?.[0]?.name || null });
+    addResultToHistory(payload);
+
+     // If preview image is available from server payload, show it
+    if (payload?.preview) {
+      // display preview image in previewWrapper
+      if (previewWrapper) {
+        previewWrapper.innerHTML = '';
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const rC = document.createElement('canvas');
+            rC.width = img.width; rC.height = img.height;
+            rC.getContext('2d').drawImage(img, 0, 0);
+            previewWrapper.dataset.fullImage = rC.toDataURL();
+            const mW = previewWrapper.clientWidth || 900;
+            const mH = 400;
+            const sc = scaleCanvasToFit(rC, mW, mH);
+            displayCanvas(sc, previewWrapper);
+            const nE = $('image-filename');
+            if (nE) { nE.textContent = (fileInput?.files?.[0]?.name || (payload.image || '').split('/').pop() || 'image'); nE.style.display = 'block'; }
+            submitBtn && (submitBtn.disabled = false);
+            uploadArea && (uploadArea.style.display = 'none');
+            clearBtn && (clearBtn.style.display = 'inline-flex');
+          } catch (e) {
+            console.warn('preview show failed', e);
+          }
+        };
+        img.onerror = () => { console.warn('Could not load preview image:', payload.preview); };
+        let src = payload.preview;
+        if (src && !src.startsWith('http') && window.location) src = (window.location.origin || '') + '/' + src.replace(/^\/+/, '');
+        img.src = src;
+      }
+    } else {
+      if (previewWrapper) previewWrapper.style.display = 'flex';
+    }
+    // === NEW — Display overlay PNG if server returned it ===
+    if (payload?.overlay) {
+        const overlayWrapper = document.getElementById("overlay-preview-wrapper");
+        const overlayImg = document.getElementById("overlay-preview-img");
+
+        if (overlayWrapper && overlayImg) {
+            let osrc = payload.overlay;
+
+            // Same origin fix for relative paths
+            if (osrc && !osrc.startsWith('http') && window.location)
+                osrc = (window.location.origin || '') + '/' + osrc.replace(/^\/+/, '');
+
+            // Cache-buster to force browser to reload new overlay each time
+            overlayImg.src = osrc + "?v=" + Date.now();
+
+            overlayWrapper.style.display = "block";
+        }
+    } else {
+        // Hide overlay if none was generated
+        const overlayWrapper = document.getElementById("overlay-preview-wrapper");
+        if (overlayWrapper) overlayWrapper.style.display = "none";
+    }
+}
+
+  // === File selection handler (DICOM safe) ===
+  function handleFileSelect(file) {
+    if (!file) {
+      if (fileInput && fileInput.files && fileInput.files.length) file = fileInput.files[0]; else return;
+    }
+    const ext = (file.name || '').toLowerCase().split('.').pop();
+    if (ext === 'dcm') {
+      // Don't try to render DICOM client-side
+      if (previewWrapper) {
+        previewWrapper.innerHTML = '<div class="loading-preview">DICOM detected — preview will load after server processing...</div>';
+        previewWrapper.style.display = 'flex';
+      }
+      submitBtn && (submitBtn.disabled = false);
+      clearBtn && (clearBtn.style.display = 'inline-flex');
+      uploadArea && (uploadArea.style.display = 'none');
+      return;
+    }
+
+    // Normal image file
+    renderToCanvas(file).then(rC => {
+      const mW = previewWrapper?.clientWidth || 900;
+      const mH = 400;
+      const sc = scaleCanvasToFit(rC, mW, mH);
+      previewWrapper && (previewWrapper.dataset.fullImage = rC.toDataURL());
+      previewWrapper && displayCanvas(sc, previewWrapper);
+      const nE = $('image-filename'); if (nE) { nE.textContent = file.name; nE.style.display = 'block'; }
+      submitBtn && (submitBtn.disabled = false);
+      clearBtn && (clearBtn.style.display = 'inline-flex');
+      uploadArea && (uploadArea.style.display = 'none');
+    }).catch(err => {
+      console.error(err);
+      showError('Could not read or render image.');
+    });
+  }
+
+  // === Form submit (AJAX) ===
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (submitBtn) submitBtn.disabled = true;
+      if (spinner) spinner.style.display = 'block';
+      if (btnText) btnText.textContent = 'Analyzing...';
+      if (skeletonLoader) skeletonLoader.style.display = 'block';
+      if (resultsContainer) resultsContainer.style.display = 'none';
+      if (resultsPlaceholder) resultsPlaceholder.style.display = 'none';
+      if (errorContainer) errorContainer.innerHTML = '';
+
+      // clear previous charts
+      Object.keys(activeCharts).forEach(k => { try { activeCharts[k].destroy(); } catch (e) {} });
+      activeCharts = {};
+
+      try {
+        const formData = new FormData(form);
+        formData.set('ajax', '1');
+        formData.delete('mock');
+
+        const resp = await fetch(window.location.href, { method: 'POST', body: formData });
+        const ct = resp.headers.get('content-type') || '';
+        if (!resp.ok) {
+          const text = await resp.text();
+          throw new Error(`HTTP ${resp.status}\n\n${text.slice(0, 2000)}`);
+        }
+        if (!ct.includes('application/json')) {
+          const text = await resp.text();
+          if (text.includes('POST Content-Length')) throw new Error('File too large.');
+          throw new Error(`Expected JSON, got HTML/text:\n\n${text.slice(0, 500)}...`);
+        }
+        const payload = await resp.json();
+        console.log('AJAX payload:', payload);
+        if (payload.ok && payload.result) {
+          window.__PREDICT__ = payload;
+          displayResults(payload.result, payload);
+        } else {
+          throw new Error(payload.error || payload.noise || 'Backend error.');
+        }
+      } catch (err) {
+        console.error('Fetch Error:', err);
+        showError(err?.message?.replace(/\n/g,'<br>') || 'Analysis error.');
+      } finally {
+        if (skeletonLoader) skeletonLoader.style.display = 'none';
+        if (spinner) spinner.style.display = 'none';
+        if (btnText) btnText.textContent = 'Run Prediction';
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+  }
+
+  // === Clear button ===
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      clearState();
+      if (fileInput) fileInput.value = '';
+      if (previewWrapper) { previewWrapper.style.display = 'none'; previewWrapper.removeAttribute('data-full-image'); previewWrapper.innerHTML = ''; }
+      const eC = previewWrapper?.querySelector('canvas'); if (eC) eC.remove();
+      const nE = $('image-filename'); if (nE) nE.style.display = 'none';
+      if (resultsContainer) resultsContainer.style.display = 'none';
+      if (errorContainer) errorContainer.innerHTML = '';
+      if (skeletonLoader) skeletonLoader.style.display = 'none';
+      if (resultsPlaceholder) resultsPlaceholder.style.display = 'block';
+      if (btnText) btnText.textContent = 'Run Prediction';
+      if (submitBtn) submitBtn.disabled = true;
+      if (clearBtn) clearBtn.style.display = 'none';
+      if (uploadArea) uploadArea.style.display = 'block';
+      Object.keys(activeCharts).forEach(k => { try { activeCharts[k].destroy(); } catch (e) {} });
+      activeCharts = {};
+      window.__PREDICT__ = null;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+  }
+
+  // === Upload area / file input handlers ===
+  if (uploadArea) uploadArea.addEventListener('click', () => fileInput && fileInput.click());
+  if (fileInput) {
+    fileInput.addEventListener('change', () => handleFileSelect());
+  }
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
+    uploadArea && uploadArea.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, false);
+  });
+  ['dragenter', 'dragover'].forEach(ev => uploadArea && uploadArea.addEventListener(ev, () => uploadArea.classList.add('dragover'), false));
+  ['dragleave', 'drop'].forEach(ev => uploadArea && uploadArea.addEventListener(ev, () => uploadArea.classList.remove('dragover'), false));
+  uploadArea && uploadArea.addEventListener('drop', e => { if (fileInput) fileInput.files = e.dataTransfer.files; handleFileSelect(); });
+
+  // Image modal click
+  document.body.addEventListener('click', e => {
+    if (e.target.closest('.maximize-btn')) {
+      const dU = $('image-preview-wrapper')?.dataset?.fullImage;
+      if (dU) showImageInModal(dU);
+    }
+  });
+  imageModalOverlay && imageModalOverlay.addEventListener('click', e => { if (e.target === imageModalOverlay) imageModalOverlay.classList.remove('visible'); });
+
+  // Card modal close
+  closeCardModalBtn && closeCardModalBtn.addEventListener('click', closeCardModal);
+  cardModalOverlay && cardModalOverlay.addEventListener('click', e => { if (e.target === cardModalOverlay) closeCardModal(); });
+
+  // History listeners
+  clearHistoryBtn && clearHistoryBtn.addEventListener('click', () => { saveHistory([]); renderHistory(); });
+  historyList && historyList.addEventListener('click', (e) => {
+    const itemEl = e.target.closest('.history-item[data-history-id]');
+    if (!itemEl) return;
+    const id = itemEl.dataset.historyId;
+    const history = loadHistory();
+    const item = history.find(h => h.id === id);
+    if (!item) return;
+    window.__PREDICT__ = { ok: true, result: item.result, image: item.imagePath };
+    displayResults(item.result, { preview: item.imagePath });
+    if (item.imagePath && previewWrapper) {
+      const img = new Image();
+      img.onload = () => {
+        const rC = document.createElement('canvas'); rC.width = img.width; rC.height = img.height; rC.getContext('2d').drawImage(img, 0, 0);
+        const dU = rC.toDataURL(); previewWrapper.dataset.fullImage = dU;
+        const mW = previewWrapper.clientWidth || 900; const mH = 400; const sc = scaleCanvasToFit(rC, mW, mH);
+        displayCanvas(sc, previewWrapper);
+        const nE = $('image-filename'); if (nE) { nE.textContent = item.filename || 'image'; nE.style.display = 'block'; }
+      };
+      img.onerror = () => console.warn('Could not load history image:', item.imagePath);
+      img.src = item.imagePath;
+    }
+    resultsContainer && resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  // Sticky panel toggle
+  function setStickyState(isSticky) {
+    if (!leftColumn || !toggleStickyBtn || !stickyBtnText) return;
+    if (isSticky) {
+      leftColumn.classList.add('is-sticky');
+      stickyBtnText.textContent = 'Unpin';
+      toggleStickyBtn.setAttribute('aria-pressed', 'true');
+    } else {
+      leftColumn.classList.remove('is-sticky');
+      stickyBtnText.textContent = 'Pin Panel';
+      toggleStickyBtn.setAttribute('aria-pressed', 'false');
+    }
+  }
+  if (toggleStickyBtn) {
+    toggleStickyBtn.addEventListener('click', () => {
+      const wants = !leftColumn.classList.contains('is-sticky');
+      setStickyState(wants);
+      try { localStorage.setItem(STICKY_KEY, wants); } catch (e) { console.warn('Could not save sticky pref'); }
+    });
+  }
+  try {
+    const storedSticky = localStorage.getItem(STICKY_KEY);
+    if (storedSticky === 'true') setStickyState(true);
+  } catch (e) {}
+
+  // Init: render history, and load initial state if available
+  renderHistory();
+  const initialPredictData = window.__PREDICT__;
+  const stored = loadState();
+  let initialImageSrc = null;
+  if (initialPredictData?.result) {
+    resultsPlaceholder && (resultsPlaceholder.style.display = 'none');
+    displayResults(initialPredictData.result, initialPredictData);
+    clearBtn && (clearBtn.style.display = 'inline-flex');
+    initialImageSrc = window.__UPLOADED_IMAGE__;
+  } else if (stored?.result) {
+    resultsPlaceholder && (resultsPlaceholder.style.display = 'none');
+    displayResults(stored.result, { preview: stored.imagePath });
+    clearBtn && (clearBtn.style.display = 'inline-flex');
+    initialImageSrc = stored.imagePath || stored.previewDataUrl;
+    window.__PREDICT__ = { ok: true, result: stored.result, image: stored.imagePath };
+  } else {
+    resultsPlaceholder && (resultsPlaceholder.style.display = 'block');
+    resultsContainer && (resultsContainer.style.display = 'none');
+    skeletonLoader && (skeletonLoader.style.display = 'none');
+  }
+
+  if (initialImageSrc && previewWrapper) {
+    const img = new Image();
+    img.onload = () => {
+      const rC = document.createElement('canvas'); rC.width = img.width; rC.height = img.height; rC.getContext('2d').drawImage(img, 0, 0);
+      const dU = rC.toDataURL(); previewWrapper.dataset.fullImage = dU;
+      const mW = previewWrapper.clientWidth || 900; const mH = 400; const sc = scaleCanvasToFit(rC, mW, mH);
+      displayCanvas(sc, previewWrapper);
+      const nE = $('image-filename'); if (nE) { nE.textContent = (initialPredictData ? (window.__UPLOADED_IMAGE__?.split('/').pop()) : stored?.filename) || 'image'; nE.style.display = 'block'; }
+      submitBtn && (submitBtn.disabled = false);
+      uploadArea && (uploadArea.style.display = 'none');
+    };
+    img.onerror = () => { console.warn('Could not load initial image:', initialImageSrc); clearState(); };
+    img.src = initialImageSrc;
+  }
+
+}); // DOMContentLoaded
+
+</script>
+
 
 </body>
 
