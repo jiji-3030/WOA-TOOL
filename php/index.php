@@ -1861,13 +1861,237 @@ const topBenData = Array.isArray(resultData.top_benign_delta)
       }).join('') : `<tr><td colspan="3">No features found.</td></tr>`;
     }
 
-    // --- CSV & print buttons ---
-    const printBtn = $('print-btn');
-    if (printBtn) {
-      const nb = printBtn.cloneNode(true);
-      printBtn.parentNode.replaceChild(nb, printBtn);
-      nb.addEventListener('click', () => window.print());
+// ===============================================
+// UNIVERSAL EXTRACTOR FOR CANVAS & IMG
+// ===============================================
+async function extractRenderedImage(selector) {
+    const el = document.querySelector(selector);
+    if (!el) return null;
+
+    // CASE 1 — Canvas (your preview)
+    if (el.tagName.toLowerCase() === "canvas") {
+        return el.toDataURL("image/png");
     }
+
+    // CASE 2 — IMG (your overlay)
+    if (el.tagName.toLowerCase() === "img") {
+        return await loadImgToBase64(el.src);
+    }
+
+    return null;
+}
+
+
+// Helper — Convert IMG URL to Base64
+function loadImgToBase64(url) {
+    return new Promise((resolve) => {
+        if (!url) return resolve(null);
+
+        // Convert relative → absolute
+        const absoluteUrl = url.startsWith("http")
+            ? url
+            : window.location.origin + "/" + url.replace(/^\/+/, "");
+
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+
+        img.onload = function () {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth;
+            canvas.height = img.naturalHeight;
+            canvas.getContext("2d").drawImage(img, 0, 0);
+            resolve(canvas.toDataURL("image/png"));
+        };
+
+        img.onerror = () => resolve(null);
+
+        img.src = absoluteUrl + "?cache=" + Date.now();
+    });
+}
+
+
+
+// ===============================================
+// FINAL REPORT HTML BUILDER (ONE PAGE)
+// ===============================================
+function buildReportHTML(result, previewBase64, overlayBase64) {
+    return `
+<meta charset="UTF-8">
+
+<style>
+    @page { size: A4; margin: 10mm; }
+    body {
+        font-family: 'Courier New', monospace;
+        font-size: 11px;
+        line-height: 1.25;
+    }
+
+    .title {
+        text-align: center;
+        font-size: 16px;
+        font-weight: bold;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+    }
+
+    .section-title {
+        font-weight: bold;
+        margin-top: 14px;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+    }
+
+    .line {
+        border-top: 1px solid black;
+        margin: 6px 0;
+    }
+
+    .image-row {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 8px;
+    }
+
+    .image-box {
+        width: 48%;
+        text-align: center;
+        border: 1px solid black;
+        padding: 4px;
+    }
+
+    .image-box img {
+        max-width: 98%;
+        max-height: 240px;
+        border: 1px solid black;
+    }
+
+    .mono-block {
+        white-space: pre-line;
+        margin-left: 12px;
+    }
+</style>
+
+
+<div class="title">Mammogram Report</div>
+<div class="section-title">Final Prediction</div>
+<div class="line"></div>
+
+<div class="mono-block" style="font-size: 13px; font-weight: bold;
+     color: ${result.prediction === "Malignant" ? "#b50000" : "#006600"};">
+${result.prediction.toUpperCase()}
+</div>
+
+
+<div class="section-title">Images</div>
+<div class="line"></div>
+
+<div class="image-row">
+    <div class="image-box">
+        <div>Original Mammogram</div>
+        ${previewBase64 ? `<img src="${previewBase64}">` : `<div>[Unavailable]</div>`}
+    </div>
+
+    <div class="image-box">
+        <div>ROI Overlay</div>
+        ${overlayBase64 ? `<img src="${overlayBase64}">` : `<div>[Unavailable]</div>`}
+    </div>
+</div>
+
+
+<div class="section-title">Clinical Indication</div>
+<div class="line"></div>
+<div class="mono-block">Screening / Uploaded Case</div>
+
+
+<div class="section-title">Impression</div>
+<div class="line"></div>
+
+<div class="mono-block">
+<b>${result.prediction.toUpperCase()}</b>
+
+${result.lesion_narrative}
+Suggested BI-RADS: ${result.lesion_birads}
+</div>
+
+
+<div class="section-title">Lesion Characteristics</div>
+<div class="line"></div>
+
+<div class="mono-block">
+${
+result.lesion_metadata.abnormality_type === "mass"
+? `
+Abnormality type:   ${result.lesion_metadata.abnormality_type}
+Mass shape:         ${result.lesion_metadata.mass_shape}
+Mass margins:       ${result.lesion_metadata.mass_margins}
+Assessment:         ${result.lesion_metadata.assessment}
+Subtlety:           ${result.lesion_metadata.subtlety}
+`
+: `
+Abnormality type:          ${result.lesion_metadata.abnormality_type}
+Calcification type:        ${result.lesion_metadata.calc_type ?? "N/A"}
+Calcification distribution:${result.lesion_metadata.calc_distribution ?? "N/A"}
+Assessment:                ${result.lesion_metadata.assessment}
+Subtlety:                  ${result.lesion_metadata.subtlety}
+`
+}
+
+</div>
+
+
+<div class="section-title">BI-RADS Description</div>
+<div class="line"></div>
+
+<div class="mono-block">
+${result.lesion_birads} — Suspicious abnormality
+</div>
+
+
+<div class="section-title">BI-RADS Reference Table</div>
+<div class="line"></div>
+
+<div class="mono-block">
+BI-RADS 0: Need additional imaging  
+BI-RADS 1: Negative  
+BI-RADS 2: Benign Finding  
+BI-RADS 3: Probably Benign  
+BI-RADS 4: Suspicious Abnormality  
+BI-RADS 5: Highly suggestive of malignancy  
+BI-RADS 6: Known malignancy  
+</div>
+`;
+}
+
+
+
+// ===============================================
+// FINAL PRINT HANDLER — IMAGES WILL SHOW
+// ===============================================
+const printBtn = $('print-btn');
+
+if (printBtn) {
+    const nb = printBtn.cloneNode(true);
+    printBtn.parentNode.replaceChild(nb, printBtn);
+
+    nb.addEventListener("click", async () => {
+        const result = window.__PREDICT__?.result;
+        if (!result) return alert("No analysis results to print.");
+
+        // Extract pixel-perfect Base64 from the actual on-screen images
+        const previewBase64 = await extractRenderedImage("#image-preview-wrapper canvas");
+        const overlayBase64 = await extractRenderedImage("#overlay-preview-img");
+
+        const html = buildReportHTML(result, previewBase64, overlayBase64);
+
+        const w = window.open("", "_blank");
+        w.document.write(html);
+        w.document.close();
+
+        setTimeout(() => w.print(), 500);
+    });
+}
+
+
     const csvBtn = $('csv-btn');
     if (csvBtn) {
       const nb2 = csvBtn.cloneNode(true);
