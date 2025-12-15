@@ -780,10 +780,10 @@ ob_end_clean();
     </div>
 
     <!-- ✅ NEW: Overlay goes HERE, under preview -->
-    <div id="overlay-preview-wrapper" 
+            <div id="overlay-preview-wrapper" 
          style="display:none; margin-top:1rem; text-align:center;">
          
-        <h4 style="margin-bottom:0.5rem;">ROI Overlay</h4>
+        <h4 style="margin-bottom:0.5rem;">Overlay</h4>
         <img id="overlay-preview-img" 
              src="" 
              style="max-width:100%; border-radius:8px;">
@@ -797,7 +797,11 @@ ob_end_clean();
         <input type="file" id="file-input" name="image" accept="*/*">
         <svg class="upload-area__icon" ...></svg>
         <p class="upload-area__text">Drag & Drop image file or <span>browse</span> to upload.</p>
+
+
+
     </div>
+
 
 </form>
             </div>
@@ -1973,14 +1977,6 @@ function buildReportHTML(result, previewBase64, overlayBase64) {
 
 
 <div class="title">Mammogram Report</div>
-<div class="section-title">Final Prediction</div>
-<div class="line"></div>
-
-<div class="mono-block" style="font-size: 13px; font-weight: bold;
-     color: ${result.prediction === "Malignant" ? "#b50000" : "#006600"};">
-${result.prediction.toUpperCase()}
-</div>
-
 
 <div class="section-title">Images</div>
 <div class="line"></div>

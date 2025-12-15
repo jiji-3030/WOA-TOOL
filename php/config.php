@@ -19,7 +19,7 @@ $defaults = [
 
 // === Model paths ===
 $models = [
-    "woa"  => "$workdir/models/model_woa.json",
+    "woa"  => "$workdir/models/model_woa_radiomics.json",
     "ewoa" => "$workdir/modelsmodel_ewoa_radiomics.json",
     "default" => "$workdir/modelsmodel_ewoa_radiomics.json"
 ];
