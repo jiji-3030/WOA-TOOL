@@ -40,7 +40,19 @@ $config  = require __DIR__ . '/config.php';
 $python  = $config['python_path'] ?? null;
 $workdir = $config['workdir'] ?? null;
 
- 
+// === HARD-SET RADIOMICS CSV (MANDATORY) ===
+$RADIO_CSV = '/Volumes/JANICE/cbis-ddsm-r/data/CBIS-DDSM-R/csv/radiomics_features_labeled.csv';
+
+if (!file_exists($RADIO_CSV)) {
+    header('Content-Type: application/json');
+    echo json_encode([
+        'ok' => false,
+        'error' => 'Radiomics CSV not found: ' . $RADIO_CSV
+    ]);
+    exit;
+}
+
+$csv_arg = ' --radiomics ' . escapeshellarg($RADIO_CSV);
 
 // Only load/unset PHP error state. Results are handled by JS/localStorage.
 $error = $_SESSION['comparison_error'] ?? null;
@@ -149,14 +161,14 @@ $debug_info = [];
 function parse_backend_output($stdout_str) {
     $result = [
         'Ground Truth' => 'N/A',
-        'Correct Classification' => 'N/A',
         'WOA' => parse_single_model_block($stdout_str, 'Woa'),
         'EWOA' => parse_single_model_block($stdout_str, 'Ewoa'),
     ];
-    if (preg_match('/"Correct Classification": "([^"]+)"/', $stdout_str, $m)) {
-        $result['Correct Classification'] = $m[1];
-        $result['Ground Truth'] = $m[1];
-    }
+if (preg_match('/"Ground Truth": "([^"]+)"/', $stdout_str, $m)) {
+    $result['Ground Truth'] = $m[1];
+}
+
+
     if ($result['WOA']['Execution Time'] === 'N/A' && $result['EWOA']['Execution Time'] === 'N/A') {
         return null; // Parsing failed completely
     }
@@ -167,6 +179,7 @@ function parse_backend_output($stdout_str) {
 function parse_single_model_block($stdout_str, $model_key) {
     $data = [
         'Prediction' => 'N/A',
+        'Correct Classification' => 'N/A',
         'Execution Time' => 'N/A',
         'Total detected' => 'N/A',
         'Total malignant' => 'N/A',
@@ -183,6 +196,9 @@ function parse_single_model_block($stdout_str, $model_key) {
     }
     $block = $block_match[1];
     if (preg_match('/"Prediction": "([^"]+)"/', $block, $m)) $data['Prediction'] = $m[1];
+    if (preg_match('/"Correct Classification": "([^"]+)"/', $block, $m)) {
+    $data['Correct Classification'] = $m[1];
+}
     if (preg_match('/total number of features detected:\s*([\d]+)/is', $block, $m)) $data['Total detected'] = $m[1];
     if (preg_match('/total number of "towards malignant":\s*([\d]+)/is', $block, $m)) $data['Total malignant'] = $m[1];
     if (preg_match('/total number of "towards benign":\s*([\d]+)/is', $block, $m)) $data['Total benign'] = $m[1];
@@ -192,6 +208,7 @@ function parse_single_model_block($stdout_str, $model_key) {
     if (preg_match('/name of benign features:\s*([\s\S]*?)(?=name of all detected features:)/i', $block, $m)) {
         $data['Benign features'] = trim(str_replace("\n", " ", $m[1]));
     }
+
     if (preg_match('/name of all detected features:\s*([\s\S]*?)(?=Exec time:)/i', $block, $m)) {
         $data['All features names'] = trim(str_replace("\n", " ", $m[1]));
     }
@@ -237,36 +254,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
                 throw new Exception("Config Error: 'python_path' or 'workdir' is not set in config.php.");
             }
 
-            // 1. Get CSV Path
-            $csv_path = $config['csv_path'] ?? null;
-            $csv_arg = '';
-            $debug_info[] = "--- CSV Path Debug ---";
-            $debug_info[] = "Config 'csv_path': " . ($csv_path ?? 'NOT SET');
-            if ($csv_path) {
-                clearstatcache();
-                $debug_info[] = "file_exists(): " . (file_exists($csv_path) ? 'true' : 'false');
-                $debug_info[] = "is_readable(): " . (is_readable($csv_path) ? 'true' : 'false');
-            }
-            $open_basedir = ini_get('open_basedir');
-            $debug_info[] = "PHP open_basedir: " . ($open_basedir ? $open_basedir : 'NOT SET (Good!)');
-            
-            if ($csv_path && file_exists($csv_path) && is_readable($csv_path)) {
-                $csv_arg = ' --csv ' . escapeshellarg($csv_path);
-            } else {
-                error_log('[comparison.php] CSV check failed. Path: ' . (string)$csv_path . ' | exists: ' . (file_exists((string)$csv_path) ? 'T' : 'F') . ' | readable: ' . (is_readable((string)$csv_path) ? 'T' : 'F'));
-            }
             
             // 2. Get Model Paths
         
-            $ewoa_model_path = $config['models']['ewoa'] ?? ($workdir . '/models/model_final_ewoa.json');
-            $woa_model_path  = $config['models']['woa']  ?? ($workdir . '/models/model_woa.json');
+            $ewoa_model_path = $config['models']['ewoa'] ?? ($workdir . '/models/model_ewoa_radiomics.json');
+            $woa_model_path  = $config['models']['woa']  ?? ($workdir . '/models/model_woa_radiomics.json');
             
             if (!file_exists($ewoa_model_path)) error_log('[comparison.php] ERROR: EWOA model not found: ' . $ewoa_model_path);
             if (!file_exists($woa_model_path))  error_log('[comparison.php] ERROR: WOA model not found: ' . $woa_model_path);
 
             // 3. Construct the final command
             $cmd = sprintf(
-                'PYTHONPATH=%s %s -m woa_tool.compare_predict --image %s --ewoa %s --woa %s%s',
+               'export PYTHONPATH=%s && %s -m woa_tool.compare_predict_radiomics --image %s --ewoa %s --woa %s%s',
                 escapeshellarg($workdir),
                 escapeshellcmd($python),
                 escapeshellarg($imagePath),
@@ -292,17 +291,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
             }
 
             // --- D. Process Python Output ---
-            $decoded = parse_backend_output(trim($stdout_str));
+            $decoded = json_decode(trim($stdout_str), true);
             
-            if ($code === 0 && $decoded !== null) {
+            if ($code === 0 && is_array($decoded) && ($decoded['ok'] ?? false)) {
+
                 // SUCCESS!
                 
                 // +++ NEW: Respond with JSON if AJAX request +++
                 if (!empty($_POST['ajax'])) {
                     header('Content-Type: application/json; charset=utf-8');
                     // Add image src to the result object
-                    $decoded['image_src'] = $uploaded_image_src;
-                    echo json_encode(['ok' => true, 'result' => $decoded, 'image' => $uploaded_image_src]);
+                    // $decoded['result']['image_src'] = $decoded['preview'] ?? null;
+
+                    echo json_encode($decoded);
+
                     exit;
                 }
                 // (No session saving needed anymore)
@@ -514,7 +516,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
               </svg>
               <p class="upload-area__text"><span>Click to upload</span> or drag & drop</p>
             </label>
-            <input type="file" id="image-upload" name="image" accept="image/*" />
+            <input type="file" id="image-upload" name="image" accept=".dcm,image/*" />
             <p class="file-meta" id="file-meta-text" style="display:none;text-align:center;"></p>
     
             <div class="form-buttons mt-3">
@@ -625,7 +627,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
               <p class="classification-banner warning">
                 <span class="banner-icon">i</span>
                 Correct Classification: <strong data-field="cc-banner-text">N/A</strong>
-                <span class="tooltip-icon">?<span class="tooltip-content">This is the ground truth label found by the backend.</span></span>
+                <span class="tooltip-icon">?<span class="tooltip-content">This indicates whether each model’s prediction matches the dataset ground truth
+(True Positive, True Negative, False Positive, or False Negative).
+</span></span>
               </p>
     
               <div class="comparison-summary">
@@ -1003,8 +1007,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
         clearHistoryBtn.style.display = 'inline-flex';
         
         historyList.innerHTML = history.map(item => {
-            const pred = item.result?.['Correct Classification'] || 'N/A'; // Use Ground Truth for the pill
-            const predClass = pred.toLowerCase().startsWith('mal') ? 'history-item-malignant' : 'history-item-benign';
+          const pred = item.result?.EWOA?.['Correct Classification'] || 'N/A';
+
+          let predClass = 'history-item-warning';
+          if (pred.startsWith('True'))  predClass = 'history-item-benign';
+          if (pred.startsWith('False')) predClass = 'history-item-malignant';
             const date = new Date(item.savedAt).toLocaleString(undefined, {
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             });
@@ -1030,22 +1037,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
 
 
     // === File Handling ===
-    function handleFile(f){
-      if(f && f.type.startsWith('image/')){
-        const r=new FileReader();
-        r.onload=e=>{
-          previewImg.src=e.target.result;
-          previewWrapper.style.display='flex';
-          uploadArea.style.display='none';
-          runButton.disabled=false;
-          resetButton.disabled=false;
-          btnText.textContent = 'Run Comparison';
-        };
-        r.readAsDataURL(f);
-        fileMetaText.textContent=`${f.name} (${(f.size/1024).toFixed(1)} KB)`;
-        fileMetaText.style.display='block';
-      }
-    }
+function handleFile(f){
+  if (!f) return;
+
+  const isImage = f.type.startsWith('image/');
+  const isDICOM = f.name.toLowerCase().endsWith('.dcm');
+
+  if (!isImage && !isDICOM) {
+    showError('Unsupported file type. Please upload an image or DICOM (.dcm) file.');
+    return;
+  }
+
+if (isImage) {
+  const r = new FileReader();
+  r.onload = e => {
+    previewImg.src = e.target.result;
+    previewWrapper.style.display = 'flex';
+  };
+  r.readAsDataURL(f);
+} else {
+  // DICOM: preview will come from backend PNG
+  previewImg.src = '';
+  previewWrapper.style.display = 'flex';
+}
+
+
+
+  uploadArea.style.display = 'none';
+  runButton.disabled = false;
+  resetButton.disabled = false;
+  btnText.textContent = 'Run Comparison';
+
+  fileMetaText.textContent = `${f.name} (${(f.size/1024).toFixed(1)} KB)`;
+  fileMetaText.style.display = 'block';
+}
+
     fileInput.addEventListener('change',e=>handleFile(e.target.files[0]));
     ['dragenter','dragover','dragleave','drop'].forEach(n=>{uploadArea.addEventListener(n,e=>{e.preventDefault();e.stopPropagation()},!1)});
     ['dragenter','dragover'].forEach(n=>{uploadArea.addEventListener(n,()=>uploadArea.classList.add('dragover'),!1)});
@@ -1131,7 +1157,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
     historyList.addEventListener('click', (e) => {
         const itemEl = e.target.closest('.history-item[data-history-id]');
         if (!itemEl) return;
-        
         const id = itemEl.dataset.historyId;
         const history = loadHistory();
         const item = history.find(h => h.id === id);
@@ -1141,6 +1166,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
             
             // 1. Display the results
             displayResults(item.result, item.imagePath); // Pass image path
+            if (item.result?.image_src) {
+  previewImg.src = item.result.image_src;
+  previewWrapper.style.display = 'flex';
+  uploadArea.style.display = 'none';
+}
             
             // 2. Display the image
             if (item.imagePath) {
@@ -1173,17 +1203,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
         errorContainer.innerHTML = '';
 
         window__PREDICT__ = { ok: true, result: resultData, image: imagePath }; // Save for modals
+        // === Render backend-generated preview (PNG from DICOM) ===
+if (resultData.image_src) {
+  previewImg.src = resultData.image_src;
+  previewWrapper.style.display = 'flex';
+  uploadArea.style.display = 'none';
+}
+
 
         try {
             // 1. Update Summary Card
-            const cc_label = resultData['Correct Classification'] || 'N/A';
-            let cc_class = 'warning';
-            if (cc_label === 'Malignant') cc_class = 'malignant';
-            if (cc_label === 'Benign') cc_class = 'benign';
-            
-            document.querySelector('[data-field="cc-banner-text"]').textContent = cc_label;
+            const woaCC  = resultData.WOA['Correct Classification'] || 'N/A';
+            const ewoaCC = resultData.EWOA['Correct Classification'] || 'N/A';
+
+            document.querySelector('[data-field="cc-banner-text"]').innerHTML =
+              `WOA: <strong>${woaCC}</strong> &nbsp;|&nbsp; EWOA: <strong>${ewoaCC}</strong>`;
+
             const ccBanner = document.querySelector('.classification-banner');
-            if (ccBanner) ccBanner.className = `classification-banner ${cc_class}`;
+            ccBanner.className = 'classification-banner warning'; // neutral banner
             
             const woa_time = Number(resultData.WOA['Execution Time'] || 0);
             const ewoa_time = Number(resultData.EWOA['Execution Time'] || 0);
@@ -1533,16 +1570,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['image']) && $_FILES[
         console.log("Loading last state from localStorage");
         displayResults(stored.result, stored.imagePath);
         
-        if (stored.imagePath) {
-            previewImg.src = stored.imagePath;
-            previewWrapper.style.display = 'flex';
-            uploadArea.style.display = 'none';
-            fileMetaText.textContent = stored.filename || 'image';
-            fileMetaText.style.display = 'block';
-            runButton.disabled = false;
-            resetButton.disabled = false;
-            btnText.textContent = 'Re-run Comparison';
-        }
+if (stored.result?.image_src) {
+  previewImg.src = stored.result.image_src;
+  previewWrapper.style.display = 'flex';
+  uploadArea.style.display = 'none';
+  fileMetaText.textContent = stored.filename || 'image';
+  fileMetaText.style.display = 'block';
+  runButton.disabled = false;
+  resetButton.disabled = false;
+  btnText.textContent = 'Re-run Comparison';
+}
+
+
     } else {
         // No stored state, ensure placeholder is visible
         placeholderCard.style.display = 'block';
