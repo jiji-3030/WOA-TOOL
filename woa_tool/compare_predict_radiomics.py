@@ -1,6 +1,6 @@
 # ==========================================================
 # compare_predict_radiomics.py
-# FINAL STABLE VERSION (NO CV2, FRONTEND SAFE)
+# FINAL CLEAN VERSION (FRONTEND + BATCH SAFE)
 # ==========================================================
 
 import os
@@ -14,9 +14,15 @@ import numpy as np
 import pandas as pd
 import pydicom
 from PIL import Image
+import random   # ← 🔴 MISSING IMPORT (REQUIRED)
 
 from woa_tool.predict_radiomics import predict_radiomics
 
+
+run_id = int(os.environ.get("WOA_RUN_ID", 0))
+
+random.seed(run_id)
+np.random.seed(run_id)
 
 # ----------------------------------------------------------
 # Generate PNG preview from DICOM (NO OpenCV)
@@ -69,28 +75,84 @@ def extract_ground_truth(df):
 
 
 # ----------------------------------------------------------
-# Normalize predictor output for frontend
+# Normalize predictor output for frontend & batch
 # ----------------------------------------------------------
 def build_block(pred, exec_time):
-    pairs = [(f["feature"], f["contribution"])
-             for f in pred["top_feature_contributions"]]
+    """
+    MODEL-LEVEL feature count  : number of features selected by WOA/EWOA during training
+    IMAGE-LEVEL feature count  : number of WOA/EWOA-selected features whose
+                                 contribution magnitude exceeds a relative threshold
+                                 for this image
+    """
 
-    malignant = [(n, v) for n, v in pairs if v < 0]
-    benign = [(n, v) for n, v in pairs if v > 0]
+    # --------------------------------------------------
+    # FULL per-feature contributions (from predict_radiomics)
+    # --------------------------------------------------
+    all_contribs = pred.get("all_feature_contributions", [])
+
+    if not all_contribs:
+        # Safety fallback (should not happen if predictor is patched)
+        image_level_count = 0
+        pairs = []
+        malignant = []
+        benign = []
+    else:
+        # (feature, contribution) pairs
+        pairs = [(f["feature"], f["contribution"]) for f in all_contribs]
+
+        malignant = [(n, v) for n, v in pairs if v < 0]
+        benign = [(n, v) for n, v in pairs if v > 0]
+
+        # --------------------------------------------------
+        # IMAGE-LEVEL SELECTION via RELATIVE THRESHOLD
+        # --------------------------------------------------
+        abs_vals = np.array([abs(f["contribution"]) for f in all_contribs])
+
+        # α = 10% of strongest contributing feature (standard, defensible)
+        alpha = 0.10
+        threshold = alpha * abs_vals.max()
+
+        strong_features = [
+            f for f in all_contribs
+            if abs(f["contribution"]) >= threshold
+        ]
+
+        image_level_count = len(strong_features)
+
+    # --------------------------------------------------
+    # MODEL-LEVEL FEATURE COUNT (training-time)
+    # --------------------------------------------------
+    selected_features = pred.get("selected_features", [])
 
     return {
         "Prediction": pred["prediction"],
         "Execution Time": f"{exec_time:.4f}",
+
+        # MODEL-LEVEL (constant per model)
+        "Selected Features (Model)": len(selected_features),
+
+        # IMAGE-LEVEL (varies per image — THIS IS THE KEY)
+        "Selected Features (Image)": image_level_count,
+
         "Total detected": str(len(pairs)),
         "Total malignant": str(len(malignant)),
         "Total benign": str(len(benign)),
+
         "Malignant features": ", ".join(n for n, _ in malignant),
         "Benign features": ", ".join(n for n, _ in benign),
-        "All features names": ", ".join(pred["selected_features"]),
-        "Top Contributors": [[n, round(v, 6)] for n, v in malignant[:10]],
-        "All Detected Features": [[n, round(v, 6)] for n, v in pairs],
-    }
 
+        "All features names": ", ".join(selected_features),
+
+        # UI / interpretation: still show Top-10 strongest features
+        "Top Contributors": [
+            [f["feature"], round(f["contribution"], 6)]
+            for f in sorted(
+                all_contribs,
+                key=lambda x: abs(x["contribution"]),
+                reverse=True
+            )[:10]
+        ],
+    }
 
 def compute_correct_classification(gt, pred):
     gt = str(gt).lower()
@@ -170,20 +232,17 @@ def main():
     )
 
     # ------------------------------------------------------
-    # Generate preview (CRITICAL FIX)
+    # Generate preview
     # ------------------------------------------------------
     preview_src = None
-
     if args.image.lower().endswith(".dcm"):
-        upload_dir = os.path.dirname(args.image)                     # php/test_uploads
-        preview_dir = os.path.join(upload_dir, "previews")           # php/test_uploads/previews
+        upload_dir = os.path.dirname(args.image)
+        preview_dir = os.path.join(upload_dir, "previews")
         preview_abs = generate_dicom_preview(args.image, preview_dir)
-
-        # 🔑 Browser-safe relative path
         preview_src = f"test_uploads/previews/{os.path.basename(preview_abs)}"
 
     # ------------------------------------------------------
-    # FINAL JSON (frontend-safe)
+    # FINAL JSON
     # ------------------------------------------------------
     output = {
         "ok": True,
@@ -197,6 +256,8 @@ def main():
     }
 
     print(json.dumps(output))
+    print(f"[DEBUG] compare_predict_radiomics using run_id seed = {run_id}", file=sys.stderr)
+
 
 
 if __name__ == "__main__":
