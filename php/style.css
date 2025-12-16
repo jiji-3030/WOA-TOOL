@@ -3974,3 +3974,124 @@ h3.chart-title .tooltip-icon { width: 15px; height: 15px; font-size: 0.7rem; lin
     grid-column: 1 / -1;
   }
 }
+/* === Full Bleed Card Modification === */
+.step-card.full-bleed-card {
+    padding-bottom: 0 !important; /* Remove bottom padding to let panel touch edges */
+    overflow: hidden; /* Ensure rounded corners clip the bottom panel */
+}
+
+/* Prediction Score Section */
+.prediction-score-container {
+    padding-bottom: 3rem;
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.prediction-text-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.prediction-indicator {
+    transform: scale(1.5);
+}
+
+.prediction-score-text {
+    font-size: 3.5rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+/* === Lesion Info Panel (The Grey Box) === */
+.lesion-info-panel {
+    background-color: #f8fafc; /* Light Grey/Blue Background */
+    border-top: 1px solid var(--border-color);
+    padding: 2rem 2.5rem;
+    /* Negative margins stretch the box to the edges of the parent card padding */
+    margin-left: -2.5rem; 
+    margin-right: -2.5rem;
+    margin-bottom: 0;
+}
+
+.lesion-info-header {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text-header);
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.lesion-info-header svg {
+    color: var(--accent-glow);
+}
+
+/* === Content Styling (Grid & Text) === */
+.lesion-narrative-text {
+    font-size: 1.05rem;
+    line-height: 1.6;
+    color: var(--text-light);
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px dashed var(--border-color);
+}
+
+.lesion-data-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 1.5rem 2rem;
+}
+
+.lesion-data-item {
+    display: flex;
+    flex-direction: column;
+}
+
+.lesion-data-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-dark);
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+}
+
+.lesion-data-value {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-header);
+    font-family: var(--font-mono);
+}
+
+/* BI-RADS Badge Style */
+.lesion-birads-box {
+    background: #fff;
+    border: 1px solid var(--border-color);
+    padding: 0.75rem 1.25rem;
+    border-radius: 8px;
+    display: inline-block;
+    margin-top: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+}
+/* === Force Modal to be Bigger === */
+#card-modal-content {
+    max-width: 1600px !important;  /* Increased from 950px to 1600px */
+    width: 95vw !important;        /* Occupy 95% of screen width */
+    max-height: 95vh !important;   /* Occupy 95% of screen height */
+}
+
+/* === Make the table scroll area taller inside the modal === */
+#card-modal-content .table-wrapper-scroll {
+    max-height: 75vh !important;   /* Increased from 400px to 75% of screen height */
+}
+
+/* === Ensure charts inside the modal use the available space === */
+#card-modal-content canvas {
+    max-height: 70vh !important;
+    width: 100% !important;
+}
