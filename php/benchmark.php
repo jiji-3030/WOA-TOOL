@@ -3,5 +3,3 @@
 // Redirect to the active Benchmark page.
 header('Location: benchmark_backend.php', true, 302);
 exit;
-
-
