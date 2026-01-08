@@ -103,6 +103,14 @@ def predict_radiomics(model_path: str, csv_row_path: str, row_index: int = 0, to
         "tau_used": tau_default,
         "score_like_probability": score,
         "row_index": int(row_index),
+
+        # 🔹 ALL selected-feature contributions (FULL, per image)
+        "all_feature_contributions": contrib_list_sorted,
+
+        # 🔹 Top-K (for UI / interpretability)
         "top_feature_contributions": top_features,
+
+        # 🔹 Model-level selected features
         "selected_features": selected_names,
     }
+

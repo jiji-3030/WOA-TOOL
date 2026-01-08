@@ -4,7 +4,7 @@ import json
 import numpy as np
 
 # Point this to the NPY directory from cbis-ddsm-r
-RADIOMICS_NPY_DIR = "/Volumes/JILLYBEAN/cbis-ddsm-r/data/CBIS-DDSM-R/npy"
+RADIOMICS_NPY_DIR = "/Volumes/JANICE/cbis-ddsm-r/data/CBIS-DDSM-R/npy"
 
 
 def load_radiomics_data(npy_dir: str = RADIOMICS_NPY_DIR):

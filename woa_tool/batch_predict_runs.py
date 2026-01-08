@@ -7,7 +7,7 @@ import sys
 # --------------------------------------------------
 # CONFIG
 # --------------------------------------------------
-N_RUNS = 2  # number of independent runs
+N_RUNS = 30 # number of independent runs
 
 # --------------------------------------------------
 # Project root (WOA-TOOL)
